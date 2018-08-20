@@ -1,16 +1,16 @@
 ################################################################################
 # Copyright (c) 2018 Advanced Micro Devices, Inc. All rights reserved.
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in
 # all copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
@@ -36,6 +36,8 @@ export ROCP_TOOL_LIB=libtool.so
 unset ROCP_PROXY_QUEUE
 # ROC profiler metrics config file
 export ROCP_METRICS=metrics.xml
+# ROC profiler kernels timing
+export ROCP_TIMESTAMP_ON=1
 # output directory for the tool library, for metrics results file 'results.txt'
 export ROCP_OUTPUT_DIR=./RESULTS
 
@@ -53,6 +55,11 @@ export ROCP_KITER=100
 export ROCP_DITER=100
 export ROCP_INPUT=input.xml
 eval $tbin
+
+#export ROCP_KITER=1
+#export ROCP_DITER=4
+#export ROCP_INPUT=input1.xml
+#eval $tbin
 
 #valgrind --leak-check=full $tbin
 #valgrind --tool=massif $tbin

@@ -1,16 +1,16 @@
 ################################################################################
 # Copyright (c) 2018 Advanced Micro Devices, Inc. All rights reserved.
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in
 # all copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
@@ -20,7 +20,7 @@
 # THE SOFTWARE.
 ################################################################################
 
-cmake_minimum_required ( VERSION 3.5.0 )
+cmake_minimum_required ( VERSION 2.8.12 )
 
 ## Verbose output.
 set ( CMAKE_VERBOSE_MAKEFILE TRUE CACHE BOOL "Verbose Output" FORCE )
@@ -76,6 +76,22 @@ add_subdirectory ( ${TEST_DIR} ${PROJECT_BINARY_DIR}/test )
 ## Install information
 install ( TARGETS ${ROCPROFILER_TARGET} LIBRARY DESTINATION ${ROCPROFILER_NAME}/lib )
 install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/inc/rocprofiler.h DESTINATION ${ROCPROFILER_NAME}/include )
+# rpl_run.sh tblextr.py txt2xml.sh
+install ( FILES
+          ${CMAKE_CURRENT_SOURCE_DIR}/bin/rpl_run.sh
+          ${CMAKE_CURRENT_SOURCE_DIR}/bin/txt2xml.sh
+          ${CMAKE_CURRENT_SOURCE_DIR}/bin/tblextr.py
+          DESTINATION ${ROCPROFILER_NAME}/bin
+          PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE )
+# gfx_metrics.xml metrics.xml
+install ( FILES
+          ${CMAKE_CURRENT_SOURCE_DIR}/test/tool/metrics.xml
+          ${CMAKE_CURRENT_SOURCE_DIR}/test/tool/gfx_metrics.xml
+          DESTINATION ${ROCPROFILER_NAME}/lib )
+# libtool.so
+install ( FILES ${PROJECT_BINARY_DIR}/test/libtool.so DESTINATION ${ROCPROFILER_NAME}/tool )
+install ( FILES ${PROJECT_BINARY_DIR}/test/ctrl DESTINATION ${ROCPROFILER_NAME}/tool
+          PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE )
 
 ## Packaging directives
 set ( CPACK_PACKAGE_NAME "${ROCPROFILER_NAME}-dev" )

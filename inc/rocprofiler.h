@@ -45,8 +45,8 @@ THE SOFTWARE.
 #include <hsa_ven_amd_aqlprofile.h>
 #include <stdint.h>
 
-#define ROCPROFILER_VERSION_MAJOR 1
-#define ROCPROFILER_VERSION_MINOR 1
+#define ROCPROFILER_VERSION_MAJOR 3
+#define ROCPROFILER_VERSION_MINOR 0
 
 #ifdef __cplusplus
 extern "C" {
@@ -178,7 +178,7 @@ hsa_status_t rocprofiler_open(hsa_agent_t agent,                      // GPU han
                               uint32_t mode,                          // profiling mode mask
                               rocprofiler_properties_t* properties);  // profiling properties
 
-// Add feature to e features set
+// Add feature to a features set
 hsa_status_t rocprofiler_add_feature(const rocprofiler_feature_t* feature,     // [in]
                                      rocprofiler_feature_set_t* features_set); // [in/out] profiling features set
 
@@ -204,10 +204,10 @@ hsa_status_t rocprofiler_reset(rocprofiler_t* context,  // [in] profiling contex
 
 // Dispatch record
 typedef struct {
-  uint64_t dispatch;                                   // dispatch timestamp
-  uint64_t begin;                                      // begin timestamp
-  uint64_t end;                                        // end timestamp
-  uint64_t complete;                                   // completion signal timestamp
+  uint64_t dispatch;                                   // dispatch timestamp, ns
+  uint64_t begin;                                      // kernel begin timestamp, ns
+  uint64_t end;                                        // kernel end timestamp, ns
+  uint64_t complete;                                   // completion signal timestamp, ns
 } rocprofiler_dispatch_record_t;
 
 // Profiling callback data
@@ -326,8 +326,11 @@ typedef struct {
   union {
     struct {
       const char* name; // metric name
+      uint32_t instances; // instances number
       const char* expr; // metric expression, NULL for basic counters
       const char* description; // metric description
+      const char* block_name; // block name
+      uint32_t block_counters; // number of block counters
     } metric;
     struct {
       const char* name; // trace name
@@ -356,6 +359,13 @@ hsa_status_t rocprofiler_query_info(
   rocprofiler_info_query_t query, // iterated info query
   hsa_status_t (*callback)(const rocprofiler_info_data_t info, void *data), // callback
   void *data); // [in/out] data passed to callback
+
+// Creates a profiled queue. All dispatches on this queue will be profiled
+hsa_status_t rocprofiler_queue_create_profiled(
+  hsa_agent_t agent_handle,uint32_t size, hsa_queue_type32_t type,
+  void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data),
+  void* data, uint32_t private_segment_size, uint32_t group_segment_size,
+  hsa_queue_t** queue);
 
 #ifdef __cplusplus
 }  // extern "C" block

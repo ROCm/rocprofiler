@@ -152,7 +152,7 @@ bool LoadTool() {
     settings.intercept_mode = (intercept_mode) ? 1 : 0;
     settings.sqtt_size = SqttProfile::GetSize();
     settings.sqtt_local = SqttProfile::IsLocal() ? 1: 0;
-    settings.timeout = Context::GetTimeout();
+    settings.timeout = util::HsaRsrcFactory::GetTimeoutNs();
     settings.timestamp_on = InterceptQueue::IsTrackerOn() ? 1 : 0;
 
     if (handler) handler();
@@ -161,8 +161,7 @@ bool LoadTool() {
     intercept_mode = (settings.intercept_mode != 0);
     SqttProfile::SetSize(settings.sqtt_size);
     SqttProfile::SetLocal(settings.sqtt_local != 0);
-    Context::SetTimeout(settings.timeout);
-    InterceptQueue::SetTimeout(settings.timeout);
+    util::HsaRsrcFactory::SetTimeoutNs(settings.timeout);
     InterceptQueue::TrackerOn(settings.timestamp_on != 0);
   }
 
@@ -188,8 +187,8 @@ CONSTRUCTOR_API void constructor() {
 }
 
 DESTRUCTOR_API void destructor() {
-  util::HsaRsrcFactory::Destroy();
   rocprofiler::MetricsDict::Destroy();
+  util::HsaRsrcFactory::Destroy();
   util::Logger::Destroy();
 }
 
@@ -211,10 +210,8 @@ hsa_status_t GetExcStatus(const std::exception& e) {
 }
 
 rocprofiler_properties_t rocprofiler_properties;
-uint64_t Context::timeout_ = UINT64_MAX;
 uint32_t SqttProfile::output_buffer_size_ = 0x2000000;  // 32M
 bool SqttProfile::output_buffer_local_ = true;
-Tracker::mutex_t Tracker::mutex_;
 util::Logger::mutex_t util::Logger::mutex_;
 util::Logger* util::Logger::instance_ = NULL;
 }
@@ -230,11 +227,36 @@ PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, uint64_t fa
   rocprofiler::SaveHsaApi(table);
   rocprofiler::ProxyQueue::InitFactory();
   bool intercept_mode = false;
+
+  // Checking environment to enable intercept mode
   const char* intercept_env = getenv("ROCP_HSA_INTERCEPT");
   if (intercept_env != NULL) {
-    if (strncmp(intercept_env, "1", 1) == 0) intercept_mode = true;
+    switch (atoi(intercept_env)) {
+      // Intercepting disabled
+      case 0:
+        intercept_mode = false;
+        rocprofiler::InterceptQueue::TrackerOn(false);
+        break;
+      // Intercepting enabled without timestamping
+      case 1:
+        intercept_mode = true;
+        rocprofiler::InterceptQueue::TrackerOn(false);
+        break;
+      // Intercepting enabled with timestamping
+      case 2:
+        intercept_mode = true;
+        rocprofiler::InterceptQueue::TrackerOn(true);
+        break;
+      default:
+        ERR_LOGGING("Bad ROCP_HSA_INTERCEPT env var value (" << intercept_env << ")");
+        return false;
+    }
   }
-  if (rocprofiler::LoadTool()) intercept_mode = true;
+
+  // Loading a tool lib and setting of intercept mode
+  const bool intercept_mode_on = rocprofiler::LoadTool();
+  if (intercept_mode_on) intercept_mode = true;
+
   // HSA intercepting
   if (intercept_mode) {
     rocprofiler::ProxyQueue::HsaIntercept(table);
@@ -479,6 +501,43 @@ PUBLIC_API hsa_status_t rocprofiler_iterate_info(
           info.metric.name = strdup(name.c_str());
           info.metric.description = strdup(descr.c_str());
           info.metric.expr = expr.empty() ? NULL : strdup(expr.c_str());
+
+          if (expr.empty()) {
+            // Getting the block name
+            const std::string block_name = node->opts["block"];
+
+            // Querying profile
+            rocprofiler::profile_t profile = {};
+            profile.agent = agent_info->dev_id;
+            profile.type = HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_PMC;
+
+            // Query block id info
+            hsa_ven_amd_aqlprofile_id_query_t query = {block_name.c_str(), 0, 0};
+            hsa_status_t status = rocprofiler::util::HsaRsrcFactory::Instance().AqlProfileApi()->hsa_ven_amd_aqlprofile_get_info(
+              &profile, HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_ID, &query);
+            if (status != HSA_STATUS_SUCCESS) AQL_EXC_RAISING(HSA_STATUS_ERROR, "get block id info: '" << block_name << "'");
+
+            // Metric object
+            const std::string metric_name = (query.instance_count > 1) ? name + "[0]" : name;
+            const rocprofiler::Metric* metric = dict->Get(metric_name);
+            if (metric == NULL) EXC_RAISING(HSA_STATUS_ERROR, "metric '" << name << "' is not found");
+
+            // Process metrics counters
+            const rocprofiler::counters_vec_t& counters_vec = metric->GetCounters();
+            if (counters_vec.size() != 1) EXC_RAISING(HSA_STATUS_ERROR, "error: '" << metric->GetName() << "' is not basic");
+
+            // Query block counters number
+            uint32_t block_counters;
+            profile.events = &(counters_vec[0]->event);
+            status = rocprofiler::util::HsaRsrcFactory::Instance().AqlProfileApi()->hsa_ven_amd_aqlprofile_get_info(
+                &profile, HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_COUNTERS, &block_counters);
+            if (status != HSA_STATUS_SUCCESS) continue;
+
+            info.metric.instances = query.instance_count;
+            info.metric.block_name = block_name.c_str();
+            info.metric.block_counters = block_counters;
+          }
+
           status = callback(info, data);
           if (status != HSA_STATUS_SUCCESS) break;
         }
@@ -517,6 +576,16 @@ PUBLIC_API hsa_status_t rocprofiler_query_info(
   API_METHOD_PREFIX
   EXC_RAISING(HSA_STATUS_ERROR, "Not implemented");
   API_METHOD_SUFFIX
+}
+
+// Creates a profiled queue. All dispatches on this queue will be profiled
+PUBLIC_API hsa_status_t rocprofiler_queue_create_profiled(
+    hsa_agent_t agent, uint32_t size, hsa_queue_type32_t type,
+    void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data),
+    void* data, uint32_t private_segment_size, uint32_t group_segment_size,
+    hsa_queue_t** queue)
+{
+  return rocprofiler::InterceptQueue::QueueCreateTracked(agent, size, type, callback, data, private_segment_size, group_segment_size, queue);
 }
 
 }  // extern "C"
