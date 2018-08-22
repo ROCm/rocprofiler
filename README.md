@@ -34,6 +34,7 @@ The library source tree:
   mkdir build
   cd build
   cmake -DCMAKE_PREFIX_PATH=/opt/rocm/lib:/opt/rocm/include/hsa ..
+  make
   
   For ROCM under 1.9 need:
   export CMAKE_CURR_API=1
