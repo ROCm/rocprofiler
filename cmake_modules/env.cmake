@@ -107,9 +107,9 @@ elseif ( ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86" )
 endif ()
 
 ## Find hsa-runtime headers/lib
-find_file ( HSA_RUNTIME_INC "hsa.h" )
-if ( "${HSA_RUNTIME_INC_PATH}" STREQUAL "" )
-  find_file ( HSA_RUNTIME_INC "hsa/hsa.h" )
+find_file ( HSA_RUNTIME_INC "hsa/hsa.h" )
+if ( "${HSA_RUNTIME_INC}" STREQUAL "" )
+  find_file ( HSA_RUNTIME_INC "hsa.h" )
 endif()
 find_library ( HSA_RUNTIME_LIB "libhsa-runtime${NBIT}.so" )
 get_filename_component ( HSA_RUNTIME_INC_PATH ${HSA_RUNTIME_INC} DIRECTORY )
