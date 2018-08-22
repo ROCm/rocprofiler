@@ -30,11 +30,13 @@ The library source tree:
 
 ## To build with the current installed ROCM:
 ```
+ - To build and install to /opt/rocm/rocprofiler
   cd .../rocprofiler
   mkdir build
   cd build
-  cmake -DCMAKE_PREFIX_PATH=/opt/rocm/lib:/opt/rocm/include/hsa ..
+  cmake -DCMAKE_PREFIX_PATH=/opt/rocm/lib:/opt/rocm/include/hsa -DCMAKE_INSTALL_PREFIX=/opt/rocm ..
   make
+  make install
   
   For ROCM under 1.9 need:
   export CMAKE_CURR_API=1
