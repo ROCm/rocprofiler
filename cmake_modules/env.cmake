@@ -118,13 +118,6 @@ get_filename_component ( HSA_RUNTIME_LIB_PATH ${HSA_RUNTIME_LIB} DIRECTORY )
 find_library ( HSA_KMT_LIB "libhsakmt.so" )
 get_filename_component ( HSA_KMT_LIB_PATH ${HSA_KMT_LIB} DIRECTORY )
 
-## Install directory
-if ( DEFINED ENV{CMAKE_INSTALL_DIR} )
-  set ( CMAKE_INSTALL_PREFIX $ENV{CMAKE_INSTALL_DIR} )
-else ()
-  set ( CMAKE_INSTALL_PREFIX "/opt/rocm" )
-endif ()
-
 ## Basic Tool Chain Information
 message ( "----------------NBit: ${NBIT}" )
 message ( "----------Build-Type: ${CMAKE_BUILD_TYPE}" )
