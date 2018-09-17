@@ -34,7 +34,8 @@ The library source tree:
   cd .../rocprofiler
   mkdir build
   cd build
-  cmake -DCMAKE_PREFIX_PATH=/opt/rocm/lib:/opt/rocm/include/hsa -DCMAKE_INSTALL_PREFIX=/opt/rocm ..
+  export CMAKE_PREFIX_PATH=/opt/rocm/lib:/opt/rocm/include/hsa
+  cmake -DCMAKE_INSTALL_PREFIX=/opt/rocm ..
   make
   make install
   
