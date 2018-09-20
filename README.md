@@ -43,18 +43,6 @@ The library source tree:
   export CMAKE_CURR_API=1
 ```
 
-## To run the test:
-```
-  cd .../rocprofiler/build
-  export LD_LIBRARY_PATH=.:<other paths> # paths to ROC profiler and oher libraries
-  export HSA_TOOLS_LIB=librocprofiler64.so # ROC profiler library loaded by HSA runtime
-  export ROCP_TOOL_LIB=test/libtool.so # tool library loaded by ROC profiler
-  export ROCP_METRICS=metrics.xml # ROC profiler metrics config file
-  export ROCP_INPUT=input.xml # input file for the tool library
-  export ROCP_OUTPUT_DIR=./ # output directory for the tool library, for metrics results file 'results.txt'
-  <your test>
-```
-
 ## Internal 'simple_convolution' test run script:
 ```
   cd .../rocprofiler/build
