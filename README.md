@@ -38,9 +38,6 @@ The library source tree:
   cmake -DCMAKE_INSTALL_PREFIX=/opt/rocm ..
   make
   make install
-  
-  For ROCM under 1.9 need:
-  export CMAKE_CURR_API=1
 ```
 
 ## Internal 'simple_convolution' test run script:
