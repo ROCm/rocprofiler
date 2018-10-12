@@ -73,9 +73,9 @@ Options:
       Input file .txt format, automatically rerun application for every pmc/sqtt line:
 
         # Perf counters group 1
-        pmc : Wavefronts VALUInsts SALUInsts SFetchInsts FlatVMemInsts LDSInsts FlatLDSInsts GDSInsts VALUUtilization FetchSize
+        pmc : Wavefronts VALUInsts SALUInsts SFetchInsts FlatVMemInsts LDSInsts FlatLDSInsts GDSInsts FetchSize
         # Perf counters group 2
-        pmc : WriteSize L2CacheHit
+        pmc : VALUUtilization,WriteSize L2CacheHit
         # Filter by dispatches range, GPU index and kernel names
         # supported range formats: "3:9", "3:", "3"
         range: 1 : 4
