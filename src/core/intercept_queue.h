@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include <amd_hsa_kernel_code.h>
 #include <cxxabi.h>
 #include <dlfcn.h>
+#include <sys/syscall.h>
 
 #include <atomic>
 #include <iostream>
@@ -49,6 +50,7 @@ class InterceptQueue {
   typedef std::map<uint64_t, InterceptQueue*> obj_map_t;
   typedef hsa_status_t (*queue_callback_t)(hsa_queue_t*, void* data);
   typedef void (*queue_event_callback_t)(hsa_status_t status, hsa_queue_t *queue, void *arg);
+  typedef uint32_t queue_id_t;
 
   static void HsaIntercept(HsaApiTable* table);
 
@@ -61,8 +63,8 @@ class InterceptQueue {
     std::lock_guard<mutex_t> lck(mutex_);
     hsa_status_t status = HSA_STATUS_ERROR;
 
-    if (in_constr_call_) EXC_ABORT(status, "recursive InterceptQueueCreate()");
-    in_constr_call_ = true;
+    if (in_create_call_) EXC_ABORT(status, "recursive InterceptQueueCreate()");
+    in_create_call_ = true;
 
     ProxyQueue* proxy = ProxyQueue::Create(agent, size, type, queue_event_callback, data, private_segment_size,
                                            group_segment_size, queue, &status);
@@ -79,8 +81,14 @@ class InterceptQueue {
     (*obj_map_)[(uint64_t)(*queue)] = obj;
     status = proxy->SetInterceptCB(OnSubmitCB, obj);
     obj->queue_event_callback_ = callback;
+    obj->queue_id = current_queue_id;
+    ++current_queue_id;
 
-    in_constr_call_ = false;
+    if (create_callback_ != NULL) {
+      status = create_callback_(*queue, callback_data_);
+    }
+
+    in_create_call_ = false;
     return status;
   }
 
@@ -139,13 +147,17 @@ class InterceptQueue {
         }
 
         // Prepareing dispatch callback data
-        const char* kernel_name = GetKernelName(dispatch_packet);
+        uint64_t kernel_symbol = GetKernelSymbol(dispatch_packet);
+        const char* kernel_name = GetKernelName(kernel_symbol);
         rocprofiler_callback_data_t data = {obj->agent_info_->dev_id,
                                             obj->agent_info_->dev_index,
                                             obj->queue_,
                                             user_que_idx,
+                                            obj->queue_id,
                                             dispatch_packet,
                                             kernel_name,
+                                            kernel_symbol,
+                                            syscall(__NR_gettid),
                                             (tracker_entry) ? tracker_entry->record : NULL};
 
         // Calling dispatch callback
@@ -154,7 +166,10 @@ class InterceptQueue {
         free(const_cast<char*>(kernel_name));
         // Injecting profiling start/stop packets
         if ((status != HSA_STATUS_SUCCESS) || (group.context == NULL)) {
-          if (tracker_entry != NULL) tracker_->Delete(tracker_entry);
+          if (tracker_entry != NULL) {
+            const_cast<hsa_kernel_dispatch_packet_t*>(dispatch_packet)->completion_signal = tracker_entry->orig;
+            tracker_->Delete(tracker_entry);
+          }
         } else {
           Context* context = reinterpret_cast<Context*>(group.context);
 
@@ -197,10 +212,15 @@ class InterceptQueue {
     }
   }
 
-  static void SetCallbacks(rocprofiler_callback_t dispatch_callback, queue_callback_t destroy_callback, void* data) {
+  static void SetCallbacks(rocprofiler_callback_t dispatch_callback,
+                           queue_callback_t create_callback,
+                           queue_callback_t destroy_callback,
+                           void* data)
+  {
     std::lock_guard<mutex_t> lck(mutex_);
     callback_data_ = data;
     dispatch_callback_ = dispatch_callback;
+    create_callback_ = create_callback;
     destroy_callback_ = destroy_callback;
   }
 
@@ -219,7 +239,7 @@ class InterceptQueue {
     return static_cast<hsa_packet_type_t>((*header >> HSA_PACKET_HEADER_TYPE) & header_type_mask);
   }
 
-  static const char* GetKernelName(const hsa_kernel_dispatch_packet_t* dispatch_packet) {
+  static uint64_t GetKernelSymbol(const hsa_kernel_dispatch_packet_t* dispatch_packet) {
     const amd_kernel_code_t* kernel_code = NULL;
     hsa_status_t status =
         util::HsaRsrcFactory::Instance().LoaderApi()->hsa_ven_amd_loader_query_host_address(
@@ -228,8 +248,12 @@ class InterceptQueue {
     if (HSA_STATUS_SUCCESS != status) {
       kernel_code = reinterpret_cast<amd_kernel_code_t*>(dispatch_packet->kernel_object);
     }
-    amd_runtime_loader_debug_info_t* dbg_info = reinterpret_cast<amd_runtime_loader_debug_info_t*>(
-        kernel_code->runtime_loader_kernel_symbol);
+    return kernel_code->runtime_loader_kernel_symbol;
+  }
+
+  static const char* GetKernelName(const uint64_t kernel_symbol) {
+    amd_runtime_loader_debug_info_t* dbg_info =
+        reinterpret_cast<amd_runtime_loader_debug_info_t*>(kernel_symbol);
     const char* kernel_name = (dbg_info != NULL) ? dbg_info->kernel_name : NULL;
 
     // Kernel name is mangled name
@@ -288,18 +312,21 @@ class InterceptQueue {
   static mutex_t mutex_;
   static const packet_word_t header_type_mask = (1ul << HSA_PACKET_HEADER_WIDTH_TYPE) - 1;
   static rocprofiler_callback_t dispatch_callback_;
+  static queue_callback_t create_callback_;
   static queue_callback_t destroy_callback_;
   static void* callback_data_;
   static obj_map_t* obj_map_;
   static const char* kernel_none_;
   static Tracker* tracker_;
   static bool tracker_on_;
-  static bool in_constr_call_;
+  static bool in_create_call_;
+  static queue_id_t current_queue_id;
 
   hsa_queue_t* const queue_;
   ProxyQueue* const proxy_;
   const util::AgentInfo* agent_info_;
   queue_event_callback_t queue_event_callback_;
+  queue_id_t queue_id;
 };
 
 }  // namespace rocprofiler

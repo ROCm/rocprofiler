@@ -45,7 +45,7 @@ THE SOFTWARE.
 #include <hsa_ven_amd_aqlprofile.h>
 #include <stdint.h>
 
-#define ROCPROFILER_VERSION_MAJOR 3
+#define ROCPROFILER_VERSION_MAJOR 5
 #define ROCPROFILER_VERSION_MINOR 0
 
 #ifdef __cplusplus
@@ -216,21 +216,24 @@ typedef struct {
   uint32_t agent_index;                                // GPU index
   const hsa_queue_t* queue;                            // HSA queue
   uint64_t queue_index;                                // Index in the queue
+  uint32_t queue_id;                                   // Queue id
   const hsa_kernel_dispatch_packet_t* packet;          // HSA dispatch packet
   const char* kernel_name;                             // Kernel name
+  uint64_t kernel_object;                              // Kernel object pointer
+  int64_t thread_id;                                   // Thread id
   const rocprofiler_dispatch_record_t* record;         // Dispatch record
 } rocprofiler_callback_data_t;
 
 // Profiling callback type
 typedef hsa_status_t (*rocprofiler_callback_t)(
-    const rocprofiler_callback_data_t* callback_data,  // [in] callback data union, data depends on
-                                                       // the callback API id
+    const rocprofiler_callback_data_t* callback_data,  // [in] callback data
     void* user_data,                                   // [in/out] user data passed to the callback
-    rocprofiler_group_t* group);                       // [out] profiling group
+    rocprofiler_group_t* group);                       // [out] returned profiling group
 
 // Queue callbacks
 typedef struct {
     rocprofiler_callback_t dispatch;                          // dispatch callback
+    hsa_status_t (*create)(hsa_queue_t* queue, void* data);   // create callback
     hsa_status_t (*destroy)(hsa_queue_t* queue, void* data);  // destroy callback
 } rocprofiler_queue_callbacks_t;
 
@@ -309,6 +312,8 @@ typedef enum {
   ROCPROFILER_INFO_KIND_METRIC_COUNT = 1, // metric features count, int32
   ROCPROFILER_INFO_KIND_TRACE = 2, // trace info
   ROCPROFILER_INFO_KIND_TRACE_COUNT = 3, // trace features count, int32
+  ROCPROFILER_INFO_KIND_TRACE_PARAMETER = 4, // trace parameter info
+  ROCPROFILER_INFO_KIND_TRACE_PARAMETER_COUNT = 5 // trace parameter count, int32
 } rocprofiler_info_kind_t;
 
 // Profiling info query
@@ -337,6 +342,12 @@ typedef struct {
       const char* description; // trace description
       uint32_t parameter_count; // supported by the trace number parameters
     } trace;
+    struct {
+      uint32_t code; // parameter code
+      const char* trace_name; // trace name
+      const char* parameter_name; // parameter name
+      const char* description; // trace parameter description
+    } trace_parameter;
   };
 } rocprofiler_info_data_t;
 
