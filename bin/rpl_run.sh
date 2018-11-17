@@ -82,7 +82,7 @@ usage() {
   echo "Metrics definition: $PKG_DIR/lib/metrics.xml"
   echo ""
   echo "Usage:"
-  echo "  rpl_run.sh [-h] [--list-basic] [--list-derived] [-i <input .txt/.xml file>] [-o <output CSV file>] <app command line>"
+  echo "  $bin_name [-h] [--list-basic] [--list-derived] [-i <input .txt/.xml file>] [-o <output CSV file>] <app command line>"
   echo ""
   echo "Options:"
   echo "  -h - this help"
@@ -91,7 +91,7 @@ usage() {
   echo "  --list-derived - to print the list of derived metrics with formulas"
   echo ""
   echo "  -i <.txt|.xml file> - input file"
-  echo "      Input file .txt format, automatically rerun application for every pmc/sqtt line:"
+  echo "      Input file .txt format, automatically rerun application for every pmc line:"
   echo ""
   echo "        # Perf counters group 1"
   echo "        pmc : Wavefronts VALUInsts SALUInsts SFetchInsts FlatVMemInsts LDSInsts FlatLDSInsts GDSInsts VALUUtilization FetchSize"
@@ -131,22 +131,17 @@ usage() {
   echo "  --timestamp <on|off> - to turn on/off the kernel disoatches timestamps, dispatch/begin/end/complete [off]"
   echo "  --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]"
   echo "  --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]"
-  echo "  --sqtt-size <byte size> - to set SQTT buffer size, aggregate for all SE [0x2000000]"
-  echo "      Can be set in KB (1024B) or MB (1048576) units, examples 20K or 20M respectively."
-  echo "  --sqtt-local <on|off> - to allocate SQTT buffer in local GPU memory [on]"
   echo ""
   echo "Configuration file:"
   echo "  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:${HOME}:<package path>"
   echo "  First the configuration file is looking in the current directory, then in your home, and then in the package directory."
-  echo "  Configurable options: 'basenames', 'timestamp', 'ctx-limit', 'heartbeat', 'sqtt-size', 'sqtt-local'."
+  echo "  Configurable options: 'basenames', 'timestamp', 'ctx-limit', 'heartbeat'."
   echo "  An example of 'rpl_rc.xml':"
   echo "    <defaults"
   echo "      basenames=off"
   echo "      timestamp=off"
   echo "      ctx-limit=0"
   echo "      heartbeat=0"
-  echo "      sqtt-size=0x20M"
-  echo "      sqtt-local=on"
   echo "    ></defaults>"
   echo ""
   exit 1
@@ -246,20 +241,6 @@ while [ 1 ] ; do
     export ROCP_OUTSTANDING_MAX="$2"
   elif [ "$1" = "--heartbeat" ] ; then
     export ROCP_OUTSTANDING_MON="$2"
-  elif [ "$1" = "--sqtt-size" ] ; then
-    size_m=`echo "$2" | sed -n "s/^\(.*\)M$/\1/p"`
-    size_k=`echo "$2" | sed -n "s/^\(.*\)K$/\1/p"`
-    if [ -n "$size_m" ] ; then size_b=$((size_m*1024*1024))
-    elif [ -n "$size_k" ] ; then size_b=$((size_k*1024))
-    else size_b=$2
-    fi
-    export ROCP_SQTT_SIZE=$size_b
-  elif [ "$1" = "--sqtt-local" ] ; then
-    if [ "$2" = "on" ] ; then
-      export ROCP_SQTT_LOCAL=1
-    else
-      export ROCP_SQTT_LOCAL=0
-    fi
   elif [ "$1" = "--verbose" ] ; then
     ARG_VAL=0
     export ROCP_VERBOSE_MODE=1
@@ -276,15 +257,16 @@ if [ "$ARG_CK" = "-" ] ; then
 fi
 
 if [ -z "$INPUT_FILE" ] ; then
-  fatal "Need input file"
+  input_base="results"
+  input_type="none"
+else
+  input_base=`echo "$INPUT_FILE" | sed "s/^\(.*\)\.\([^\.]*\)$/\1/"`
+  input_type=`echo "$INPUT_FILE" | sed "s/^\(.*\)\.\([^\.]*\)$/\2/"`
+  if [ -z "${input_base}" -o -z "${input_type}" ] ; then
+    fatal "Bad input file '$INPUT_FILE'"
+  fi
+  input_base=`basename $input_base`
 fi
-
-input_base=`echo "$INPUT_FILE" | sed "s/^\(.*\)\.\([^\.]*\)$/\1/"`
-input_type=`echo "$INPUT_FILE" | sed "s/^\(.*\)\.\([^\.]*\)$/\2/"`
-if [ -z "${input_base}" -o -z "${input_type}" ] ; then
-  fatal "Bad input file '$INPUT_FILE'"
-fi
-input_base=`basename $input_base`
 
 if [ "$OUTPUT_DIR" = "--" ] ; then
   fatal "Bad output dir '$OUTPUT_DIR'"
@@ -309,7 +291,7 @@ input_list=""
 RES_DIR=""
 if [ "$input_type" = "xml" ] ; then
   input_list=$INPUT_FILE
-elif [ "$input_type" = "txt" ] ; then
+elif [ "$input_type" = "txt" -o "$input_type" = "none" ] ; then
   OUTPUT_DIR="-"
   RES_DIR=$DATA_PATH/$DATA_DIR
   if [ -e $RES_DIR ] ; then
@@ -317,7 +299,11 @@ elif [ "$input_type" = "txt" ] ; then
   fi
   mkdir -p $RES_DIR
   echo "RPL: output dir '$RES_DIR'"
-  $BIN_DIR/txt2xml.sh $INPUT_FILE $RES_DIR
+  if [ "$input_type" = "txt" ] ; then
+    $BIN_DIR/txt2xml.sh $INPUT_FILE $RES_DIR
+  else
+    echo "<metric></metric>" > $RES_DIR/input.xml
+  fi
   input_list=`/bin/ls $RES_DIR/input*.xml`
   export ROCPROFILER_SESS=$RES_DIR
 else
@@ -341,6 +327,8 @@ if [ -n "$csv_output" ] ; then
   python $BIN_DIR/tblextr.py $csv_output $OUTPUT_LIST
   if [ "$?" -eq 0 ] ; then
     echo "RPL: '$csv_output' is generated"
+  else
+    echo "Data extracting error: $OUTPUT_LIST'"
   fi
 fi
 

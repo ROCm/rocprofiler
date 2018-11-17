@@ -20,24 +20,52 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 *******************************************************************************/
 
-#include "core/intercept_queue.h"
+#ifndef TEST_DUMMY_KERNEL_DUMMY_KERNEL_H_
+#define TEST_DUMMY_KERNEL_DUMMY_KERNEL_H_
 
-namespace rocprofiler {
-void InterceptQueue::HsaIntercept(HsaApiTable* table) {
-  table->core_->hsa_queue_create_fn = rocprofiler::InterceptQueue::QueueCreate;
-  table->core_->hsa_queue_destroy_fn = rocprofiler::InterceptQueue::QueueDestroy;
-}
+#include <map>
+#include <vector>
 
-InterceptQueue::mutex_t InterceptQueue::mutex_;
-rocprofiler_callback_t InterceptQueue::dispatch_callback_ = NULL;
-InterceptQueue::queue_callback_t InterceptQueue::create_callback_ = NULL;
-InterceptQueue::queue_callback_t InterceptQueue::destroy_callback_ = NULL;
-void* InterceptQueue::callback_data_ = NULL;
-InterceptQueue::obj_map_t* InterceptQueue::obj_map_ = NULL;
-const char* InterceptQueue::kernel_none_ = "";
-Tracker* InterceptQueue::tracker_ = NULL;
-bool InterceptQueue::tracker_on_ = false;
-bool InterceptQueue::in_create_call_ = false;
-InterceptQueue::queue_id_t InterceptQueue::current_queue_id = 0;
+#include "ctrl/test_kernel.h"
 
-}  // namespace rocprofiler
+// Class implements DummyKernel kernel parameters
+class DummyKernel : public TestKernel {
+ public:
+  // Kernel buffers IDs
+  enum { KERNARG_BUF_ID, LOCAL_BUF_ID };
+
+  // Constructor
+  DummyKernel() :
+    width_(64),
+    height_(64)
+  {
+    SetInDescr(KERNARG_BUF_ID, KERNARG_DES_ID, 0);
+    SetOutDescr(LOCAL_BUF_ID, LOCAL_DES_ID, 0);
+  }
+
+  // Initialize method
+  void Init() {}
+
+  // Return compute grid size
+  uint32_t GetGridSize() const { return width_ * height_; }
+
+  // Print output
+  void PrintOutput(const void* ptr) const {}
+
+  // Return name
+  std::string Name() const { return std::string("DummyKernel"); }
+
+ private:
+  // Reference CPU implementation
+  bool ReferenceImplementation(uint32_t* output, const uint32_t* input, const float* mask,
+                               const uint32_t width, const uint32_t height,
+                               const uint32_t maskWidth, const uint32_t maskHeight) { return true; }
+
+  // Width of the Input array
+  const uint32_t width_;
+
+  // Height of the Input array
+  const uint32_t height_;
+};
+
+#endif  // TEST_DUMMY_KERNEL_DUMMY_KERNEL_H_
