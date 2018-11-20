@@ -27,7 +27,6 @@ BIN_DIR=`dirname $0`
 BIN_DIR=`cd $BIN_DIR; pwd`
 RUN_DIR=`pwd`
 TMP_DIR="/tmp"
-DATA_PATH=$TMP_DIR
 DATA_DIR="rpl_data_${time_stamp}_$$"
 
 PKG_DIR=`echo $BIN_DIR | sed "s/\/bin\/*//"`
@@ -195,6 +194,7 @@ if [ -z "$1" ] ; then
 fi
 
 INPUT_FILE=""
+DATA_PATH="-"
 OUTPUT_DIR="-"
 output=""
 csv_output=""
@@ -210,8 +210,7 @@ while [ 1 ] ; do
   elif [ "$1" = "-o" ] ; then
     output="$2"
   elif [ "$1" = "-d" ] ; then
-    OUTPUT_DIR="$2"
-    DATA_PATH=$OUTPUT_DIR
+    DATA_PATH=$2
   elif [ "$1" = "-t" ] ; then
     TMP_DIR="$2"
     if [ "$OUTPUT_DIR" = "-" ] ; then
@@ -268,8 +267,8 @@ else
   input_base=`basename $input_base`
 fi
 
-if [ "$OUTPUT_DIR" = "--" ] ; then
-  fatal "Bad output dir '$OUTPUT_DIR'"
+if [ "$DATA_PATH" = "-" ] ; then
+  DATA_PATH=$TMP_DIR
 fi
 
 if [ -n "$output" ] ; then
@@ -290,9 +289,9 @@ echo "RPL: input file '$INPUT_FILE'"
 input_list=""
 RES_DIR=""
 if [ "$input_type" = "xml" ] ; then
+  OUTPUT_DIR=$DATA_PATH
   input_list=$INPUT_FILE
 elif [ "$input_type" = "txt" -o "$input_type" = "none" ] ; then
-  OUTPUT_DIR="-"
   RES_DIR=$DATA_PATH/$DATA_DIR
   if [ -e $RES_DIR ] ; then
     error "Rundir '$RES_DIR' exists"
