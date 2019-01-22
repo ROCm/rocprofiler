@@ -84,8 +84,7 @@ def print_tbl(outfile):
 
   out = open(outfile, 'w')
 
-  keys = var_table.keys()
-  keys.sort(key=int)
+  keys = sorted(var_table.keys(), key=int)
 
   entry = var_table[keys[0]]
   list1 = []
