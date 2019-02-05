@@ -58,7 +58,7 @@ The library source tree:
 
 ## Profiling utility usage:
 ```
-  rpl_run.sh [-h] [--list-basic] [--list-derived] [-i <input .txt/.xml file>] [-o <output CSV file>] <app command line>
+  rocprof [-h] [--list-basic] [--list-derived] [-i <input .txt/.xml file>] [-o <output CSV file>] <app command line>
 
 Options:
   -h - this help
