@@ -58,7 +58,7 @@ The library source tree:
 
 ## Profiling utility usage:
 ```
-  rpl_run.sh [-h] [--list-basic] [--list-derived] [-i <input .txt/.xml file>] [-o <output CSV file>] <app command line>
+  rocprof [-h] [--list-basic] [--list-derived] [-i <input .txt/.xml file>] [-o <output CSV file>] <app command line>
 
 Options:
   -h - this help
@@ -113,7 +113,6 @@ Options:
     Generated files: <output name>.hsa_stats.txt <output name>.json
   --hip-trace - to trace HIP, generates API execution stats and JSON file viewable in chrome tracing
     Generated files: <output name>.hip_stats.txt <output name>.json
-
 
 Configuration file:
   You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:/home/evgeny:<package path>
