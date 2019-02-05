@@ -23,19 +23,27 @@
 ################################################################################
 
 time_stamp=`date +%y%m%d_%H%M%S`
-BIN_DIR=`dirname $0`
-BIN_DIR=`cd $BIN_DIR; pwd`
+BIN_DIR=$(dirname $(realpath $0))
+PKG_DIR=$(dirname $BIN_DIR)
+ROOT_DIR=$(dirname $PKG_DIR)
 RUN_DIR=`pwd`
 TMP_DIR="/tmp"
 DATA_DIR="rpl_data_${time_stamp}_$$"
 
-PKG_DIR=`echo $BIN_DIR | sed "s/\/bin\/*//"`
-BIN_DIR=$PKG_DIR/bin
-
 # PATH to custom HSA and OpenCl runtimes
 HSA_PATH=$PKG_DIR/lib/hsa
 
-export LD_LIBRARY_PATH=$PKG_DIR/lib:$PKG_DIR/tool:$HSA_PATH
+# roctracer path
+if [ -z "$ROCTRACER_PATH" ] ; then ROCTRACER_PATH=$ROOT_DIR/roctracer; fi
+
+# runtime API trace
+HSA_TRACE=0
+HIP_TRACE=0
+
+# Generate stats
+GEN_STATS=0
+
+export LD_LIBRARY_PATH=$PKG_DIR/lib:$PKG_DIR/tool:$ROCTRACER_PATH/lib:$ROCTRACER_PATH/tool:$HSA_PATH
 export PATH=.:$PATH
 
 # enable error logging
@@ -128,8 +136,13 @@ usage() {
   echo ""
   echo "  --basenames <on|off> - to turn on/off truncating of the kernel full function names till the base ones [off]"
   echo "  --timestamp <on|off> - to turn on/off the kernel disoatches timestamps, dispatch/begin/end/complete [off]"
+  echo "  --ctx-wait <on|off> - to wait for outstanding contexts on profiler exit [on]"
   echo "  --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]"
   echo "  --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]"
+  echo ""
+  echo "  --stats - generating kernel executino stats"
+  echo "  --hsa-trace - to trace HSA, generates API execution stats and JSON file viewable in chrome tracing"
+  echo "  --hip-trace - to trace HIP, generates API execution stats and JSON file viewable in chrome tracing"
   echo ""
   echo "Configuration file:"
   echo "  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:${HOME}:<package path>"
@@ -178,12 +191,36 @@ run() {
     mkdir -p "$ROCP_OUTPUT_DIR"
   fi
 
+  API_TRACE=""
+  PRELOAD_LIBS=""
+  if [ "$HSA_TRACE" = 1 ] ; then
+    API_TRACE="hsa"
+  fi
+  if [ "$HIP_TRACE" = 1 ] ; then
+    if [ -z "$API_TRACE" ] ; then
+      API_TRACE="hip";
+    else
+      API_TRACE="all"
+    fi
+    if [ -z "$HCC_HOME" ] ; then error "env var HCC_HOME is not defined"; fi
+    PRELOAD_LIBS="$PRELOAD_LIBS $HCC_HOME/lib/libmcwamp_hsa.so"
+  fi
+  if [ -n "$API_TRACE" ] ; then
+    API_TRACE=$(echo $API_TRACE | sed 's/all//')
+    if [ -n "$API_TRACE" ] ; then export ROCTRACER_DOMAIN=$API_TRACE; fi
+    export HSA_TOOLS_LIB="libtracer_tool.so libroctracer64.so $HSA_TOOLS_LIB"
+    PRELOAD_LIBS="$PRELOAD_LIBS $HSA_TOOLS_LIB"
+  fi
+
+  redirection_cmd=""
   if [ -n "$ROCP_OUTPUT_DIR" ] ; then
     OUTPUT_LIST="$OUTPUT_LIST $ROCP_OUTPUT_DIR/results.txt"
-    eval "$APP_CMD 2>&1 | tee $ROCP_OUTPUT_DIR/log.txt"
-  else
-    eval "$APP_CMD"
+    redirection_cmd="2>&1 | tee $ROCP_OUTPUT_DIR/log.txt"
   fi
+
+  #unset ROCP_OUTPUT_DIR
+  CMD_LINE="LD_PRELOAD='$PRELOAD_LIBS' $APP_CMD $redirection_cmd"
+  eval "$CMD_LINE"
 }
 
 # main
@@ -236,10 +273,29 @@ while [ 1 ] ; do
     else
       export ROCP_TIMESTAMP_ON=0
     fi
+  elif [ "$1" = "--ctx-wait" ] ; then
+    if [ "$2" = "on" ] ; then
+      export ROCP_OUTSTANDING_WAIT=1
+    else
+      export ROCP_OUTSTANDING_WAIT=0
+    fi
   elif [ "$1" = "--ctx-limit" ] ; then
     export ROCP_OUTSTANDING_MAX="$2"
   elif [ "$1" = "--heartbeat" ] ; then
     export ROCP_OUTSTANDING_MON="$2"
+  elif [ "$1" = "--stats" ] ; then
+    ARG_VAL=0
+    export ROCP_TIMESTAMP_ON=1
+    GEN_STATS=1
+  elif [ "$1" = "--hsa-trace" ] ; then
+    ARG_VAL=0
+    export ROCP_TIMESTAMP_ON=1
+    GEN_STATS=1
+    HSA_TRACE=1
+  elif [ "$1" = "--hip-trace" ] ; then
+    ARG_VAL=0
+    GEN_STATS=1
+    HIP_TRACE=1
   elif [ "$1" = "--verbose" ] ; then
     ARG_VAL=0
     export ROCP_VERBOSE_MODE=1
@@ -323,7 +379,12 @@ for name in $input_list; do
 done
 
 if [ -n "$csv_output" ] ; then
-  python $BIN_DIR/tblextr.py $csv_output $OUTPUT_LIST
+  if [ "$GEN_STATS" = "1" ] ; then
+    db_output=$(echo $csv_output | sed "s/\.csv/.db/")
+    python $BIN_DIR/tblextr.py $db_output $OUTPUT_LIST
+  else
+    python $BIN_DIR/tblextr.py $csv_output $OUTPUT_LIST
+  fi
   if [ "$?" -eq 0 ] ; then
     echo "RPL: '$csv_output' is generated"
   else

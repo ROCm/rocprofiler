@@ -69,6 +69,18 @@ struct callbacks_data_t {
   std::vector<uint32_t>* range;
 };
 
+// kernel properties structure
+struct kernel_properties_t {
+  uint32_t grid_size;
+  uint32_t workgroup_size;
+  uint32_t lds_size;
+  uint32_t scratch_size;
+  uint32_t vgpr_count;
+  uint32_t sgpr_count;
+  uint32_t fbarrier_count;
+  hsa_signal_t signal;
+};
+
 // Context stored entry type
 struct context_entry_t {
   bool valid;
@@ -79,6 +91,7 @@ struct context_entry_t {
   rocprofiler_feature_t* features;
   unsigned feature_count;
   rocprofiler_callback_data_t data;
+  kernel_properties_t kernel_properties;
   FILE* file_handle;
 };
 
@@ -100,7 +113,7 @@ context_array_t* context_array = NULL;
 // Contexts collected count
 volatile uint32_t context_count = 0;
 volatile uint32_t context_collected = 0;
-// Profiling results output file name
+// Profiling results output dir
 const char* result_prefix = NULL;
 // Global results file handle
 FILE* result_file_handle = NULL;
@@ -116,6 +129,7 @@ std::vector<std::string>* kernel_string_vec = NULL;
 //  DIspatch number range filter
 std::vector<uint32_t>* range_vec = NULL;
 // Otstanding dispatches parameters
+static uint32_t CTX_OUTSTANDING_WAIT = 1;
 static uint32_t CTX_OUTSTANDING_MAX = 0;
 static uint32_t CTX_OUTSTANDING_MON = 0;
 // to truncate kernel names
@@ -413,11 +427,20 @@ bool dump_context_entry(context_entry_t* entry) {
   FILE* file_handle = entry->file_handle;
   const std::string nik_name = (to_truncate_names == 0) ? entry->data.kernel_name : filtr_kernel_name(entry->data.kernel_name);
 
-  fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), kernel-name(\"%s\")",
+  fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), tid(%lu), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), kernel-name(\"%s\")",
     index,
     HsaRsrcFactory::Instance().GetAgentInfo(entry->agent)->dev_index,
     entry->data.queue_id,
     entry->data.queue_index,
+    entry->data.thread_id,
+    entry->kernel_properties.grid_size,
+    entry->kernel_properties.workgroup_size,
+    entry->kernel_properties.lds_size,
+    entry->kernel_properties.scratch_size,
+    entry->kernel_properties.vgpr_count,
+    entry->kernel_properties.sgpr_count,
+    entry->kernel_properties.fbarrier_count,
+    entry->kernel_properties.signal.handle,
     nik_name.c_str());
   if (record) fprintf(file_handle, ", time(%lu,%lu,%lu,%lu)",
     record->dispatch,
@@ -480,13 +503,13 @@ void dump_context_array(hsa_queue_t* queue) {
           }
         }
       }
-
-      if (pthread_mutex_unlock(&mutex) != 0) {
-        perror("pthread_mutex_unlock");
-        abort();
-      }
-      if (done == false) sched_yield();
     }
+
+    if (pthread_mutex_unlock(&mutex) != 0) {
+      perror("pthread_mutex_unlock");
+      abort();
+    }
+    if (done == false) sched_yield();
   }
 }
 
@@ -563,6 +586,8 @@ bool check_filter(const rocprofiler_callback_data_t* callback_data, const callba
 hsa_status_t dispatch_callback(const rocprofiler_callback_data_t* callback_data, void* user_data,
                                rocprofiler_group_t* group) {
   // Passed tool data
+  const hsa_kernel_dispatch_packet_t* packet = callback_data->packet;
+  const amd_kernel_code_t* kernel_code = callback_data->kernel_code;
   callbacks_data_t* tool_data = reinterpret_cast<callbacks_data_t*>(user_data);
   // HSA status
   hsa_status_t status = HSA_STATUS_ERROR;
@@ -578,6 +603,21 @@ hsa_status_t dispatch_callback(const rocprofiler_callback_data_t* callback_data,
   rocprofiler_t* context = NULL;
   // Context entry
   context_entry_t* entry = alloc_context_entry();
+  // kernel properties
+  kernel_properties_t* kernel_properties_ptr = &(entry->kernel_properties);
+  uint64_t grid_size = packet->grid_size_x * packet->grid_size_y * packet->grid_size_z;
+  if (grid_size > UINT32_MAX) abort();
+  kernel_properties_ptr->grid_size = (uint32_t)grid_size;
+  uint64_t workgroup_size = packet->workgroup_size_x * packet->workgroup_size_y * packet->workgroup_size_z;
+  if (workgroup_size > UINT32_MAX) abort();
+  kernel_properties_ptr->workgroup_size = (uint32_t)workgroup_size;
+  kernel_properties_ptr->lds_size = packet->group_segment_size;
+  kernel_properties_ptr->scratch_size = packet->private_segment_size;
+  kernel_properties_ptr->vgpr_count = kernel_code->reserved_vgpr_count;
+  kernel_properties_ptr->sgpr_count = kernel_code->reserved_sgpr_count;
+  kernel_properties_ptr->fbarrier_count = kernel_code->workgroup_fbarrier_count;
+  kernel_properties_ptr->signal = packet->completion_signal;
+
   // context properties
   rocprofiler_properties_t properties{};
   properties.handler = (result_prefix != NULL) ? context_handler : NULL;
@@ -660,7 +700,7 @@ static hsa_status_t info_callback(const rocprofiler_info_data_t info, void * arg
   return HSA_STATUS_SUCCESS;
 }
 
-std::string normalize_token(const std::string token, bool not_empty, std::string label) {
+std::string normalize_token(const std::string& token, bool not_empty, const std::string& label) {
   const std::string space_chars_set = " \t";
   const size_t first_pos = token.find_first_not_of(space_chars_set);
   size_t norm_len = 0;
@@ -676,23 +716,17 @@ std::string normalize_token(const std::string token, bool not_empty, std::string
   }
   if (((first_pos != std::string::npos) && (norm_len == 0)) ||
       ((first_pos == std::string::npos) && not_empty)) {
-    fatal(label + ": " + error_str);
+    fatal("normalize_token error, " + label + ": '" + token + "'," + error_str);
   }
   return (norm_len != 0) ? token.substr(first_pos, norm_len) : std::string("");
 }
 
-int get_xml_array(xml::Xml* xml, const std::string& tag, const std::string& field, const std::string& delim, std::vector<std::string>* vec, const char* label = NULL) {
+int get_xml_array(const xml::Xml::level_t* node, const std::string& field, const std::string& delim, std::vector<std::string>* vec, const char* label = NULL) {
   int parse_iter = 0;
-  auto nodes = xml->GetNodes(tag);
-  auto rit = nodes.rbegin();
-  auto rend = nodes.rend();
-  while (rit != rend) {
-    auto& opts = (*rit)->opts;
-    if (opts.find(field) != opts.end()) break;
-    ++rit;
-  }
-  if (rit != rend) {
-    const std::string array_string = (*rit)->opts[field];
+  const auto& opts = node->opts;
+  auto it = opts.find(field);
+  if (it != opts.end()) {
+    const std::string array_string = it->second;
     if (label != NULL) printf("%s%s = %s\n", label, field.c_str(), array_string.c_str());
     size_t pos1 = 0;
     const size_t string_len = array_string.length();
@@ -701,14 +735,30 @@ int get_xml_array(xml::Xml* xml, const std::string& tag, const std::string& fiel
       const bool found = (pos2 != std::string::npos);
       const size_t token_len = (pos2 != std::string::npos) ? pos2 - pos1 : string_len - pos1;
       const std::string token = array_string.substr(pos1, token_len);
-      const std::string norm_str = normalize_token(token, found, "Tokens array parsing error, file '" + xml->GetName() + "', " + tag + "::" + field);
+      const std::string norm_str = normalize_token(token, found, "get_xml_array");
       if (norm_str.length() != 0) vec->push_back(norm_str);
       if (!found) break;
       pos1 = pos2 + 1;
       ++parse_iter;
     }
   }
+  return parse_iter;
+}
 
+int get_xml_array(xml::Xml* xml, const std::string& tag, const std::string& field, const std::string& delim, std::vector<std::string>* vec, const char* label = NULL) {
+  int parse_iter = 0;
+  const auto nodes = xml->GetNodes(tag);
+  auto rit = nodes.rbegin();
+  const auto rend = nodes.rend();
+  while (rit != rend) {
+    auto& opts = (*rit)->opts;
+    if (opts.find(field) != opts.end()) break;
+    ++rit;
+  }
+  if (rit != rend) {
+    parse_iter = get_xml_array(*rit, field, delim, vec, label);
+    //fatal("Tokens array parsing error, file '" + xml->GetName() + "', " + tag + "::" + field);
+  }
   return parse_iter;
 }
 
@@ -765,6 +815,8 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
       if (it != opts.end()) { to_truncate_names = (it->second == "on") ? 1 : 0; }
       it = opts.find("timestamp");
       if (it != opts.end()) { settings->timestamp_on = (it->second == "on") ? 1 : 0; }
+      it = opts.find("ctx-wait");
+      if (it != opts.end()) { CTX_OUTSTANDING_WAIT = atol(it->second.c_str()); }
       it = opts.find("ctx-limit");
       if (it != opts.end()) { CTX_OUTSTANDING_MAX = atol(it->second.c_str()); }
       it = opts.find("heartbeat");
@@ -789,6 +841,7 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
   // Enable kernel names truncating
   check_env_var("ROCP_TRUNCATE_NAMES", to_truncate_names);
   // Set outstanding dispatches parameter
+  check_env_var("ROCP_OUTSTANDING_WAIT", CTX_OUTSTANDING_WAIT);
   check_env_var("ROCP_OUTSTANDING_MAX", CTX_OUTSTANDING_MAX);
   check_env_var("ROCP_OUTSTANDING_MON", CTX_OUTSTANDING_MON);
   // Enable timestamping
@@ -884,10 +937,7 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
     range_vec->push_back(*(range_vec->begin()) + 1);
   }
 
-  // Getting traces
-  auto traces_list = xml->GetNodes("top.trace");
-
-  const unsigned feature_count = metrics_vec.size() + traces_list.size();
+  const unsigned feature_count = metrics_vec.size();
   rocprofiler_feature_t* features = new rocprofiler_feature_t[feature_count];
   memset(features, 0, feature_count * sizeof(rocprofiler_feature_t));
 
@@ -901,71 +951,7 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
   }
   if (metrics_vec.size()) printf("\n");
 
-  printf("  %d traces\n", (int)traces_list.size());
-  unsigned index = metrics_vec.size();
-  for (auto* entry : traces_list) {
-    auto params_list = xml->GetNodes("top.trace.parameters");
-    if (params_list.size() > 1) {
-      fatal("ROCProfiler: Single input 'parameters' section is supported");
-    }
-    std::string name = "";
-    bool to_copy_data = false;
-    for (const auto& opt : entry->opts) {
-      if (opt.first == "name") name = opt.second;
-      else if (opt.first == "copy") to_copy_data = (opt.second == "true");
-      else fatal("ROCProfiler: Bad trace property '" + opt.first + "'");
-    }
-    if (name == "") fatal("ROCProfiler: Bad trace properties, name is not specified");
-
-    std::map<std::string, hsa_ven_amd_aqlprofile_parameter_name_t> parameters_dict;
-    parameters_dict["TARGET_CU"] =
-        HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_COMPUTE_UNIT_TARGET;
-    parameters_dict["VM_ID_MASK"] =
-        HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_VM_ID_MASK;
-    parameters_dict["MASK"] =
-        HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_MASK;
-    parameters_dict["TOKEN_MASK"] =
-        HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK;
-    parameters_dict["TOKEN_MASK2"] =
-        HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK2;
-#ifdef AQLPROF_NEW_API
-    parameters_dict["SE_MASK"] =
-        HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SE_MASK;
-#endif
-
-    printf("    %s (", name.c_str());
-    features[index] = {};
-    features[index].kind = ROCPROFILER_FEATURE_KIND_TRACE;
-    features[index].name = strdup(name.c_str());
-    features[index].data.result_bytes.copy = to_copy_data;
-
-    for (auto* params : params_list) {
-      const unsigned parameter_count = params->opts.size();
-      rocprofiler_parameter_t* parameters = new rocprofiler_parameter_t[parameter_count];
-      unsigned p_index = 0;
-      for (auto& v : params->opts) {
-        const std::string parameter_name = v.first;
-        if (parameters_dict.find(parameter_name) == parameters_dict.end()) {
-          fprintf(stderr, "ROCProfiler: unknown trace parameter '%s'\n", parameter_name.c_str());
-          abort();
-        }
-        const uint32_t value = strtol(v.second.c_str(), NULL, 0);
-        printf("\n      %s = 0x%x", parameter_name.c_str(), value);
-        parameters[p_index] = {};
-        parameters[p_index].parameter_name = parameters_dict[parameter_name];
-        parameters[p_index].value = value;
-        ++p_index;
-      }
-
-      features[index].parameters = parameters;
-      features[index].parameter_count = parameter_count;
-    }
-    if (params_list.empty() == false) printf("\n    ");
-    printf(")\n");
-    fflush(stdout);
-    ++index;
-  }
-  fflush(stdout);
+  const uint32_t features_found = metrics_vec.size();
 
   // Context array aloocation
   context_array = new context_array_t;
@@ -977,7 +963,7 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
 
   callbacks_data = new callbacks_data_t{};
   callbacks_data->features = features;
-  callbacks_data->feature_count = feature_count;
+  callbacks_data->feature_count = features_found;
   callbacks_data->set = (metrics_set->empty()) ? NULL : metrics_set;
   callbacks_data->group_index = 0;
   callbacks_data->file_handle = result_file_handle;
@@ -1022,13 +1008,13 @@ extern "C" PUBLIC_API void OnUnloadTool() {
   fflush(stdout);
   if (result_file_opened) {
     printf("\nROCPRofiler:"); fflush(stdout);
-    dump_context_array(NULL);
+    if (CTX_OUTSTANDING_WAIT == 1) dump_context_array(NULL);
     fclose(result_file_handle);
     printf(" %u contexts collected, output directory %s\n", context_collected, result_prefix);
   } else {
     if (context_collected != context_count) {
       results_output_break();
-      dump_context_array(NULL);
+      if (CTX_OUTSTANDING_WAIT == 1) dump_context_array(NULL);
     }
     printf("\nROCPRofiler: %u contexts collected\n", context_collected);
   }

@@ -136,12 +136,15 @@ void * tool_handle = NULL;
 
 // Load profiling tool library
 // Return true if intercepting mode is enabled
-bool LoadTool() {
-  bool intercept_mode = false;
+enum {
+  DISPATCH_INTERCEPT_MODE = 0x1
+};
+uint32_t LoadTool() {
+  uint32_t intercept_mode = 0;
   const char* tool_lib = getenv("ROCP_TOOL_LIB");
 
   if (tool_lib) {
-    intercept_mode = true;
+    intercept_mode = DISPATCH_INTERCEPT_MODE;
 
     tool_handle = dlopen(tool_lib, RTLD_NOW);
     if (tool_handle == NULL) {
@@ -164,7 +167,7 @@ bool LoadTool() {
     }
 
     rocprofiler_settings_t settings{};
-    settings.intercept_mode = (intercept_mode) ? 1 : 0;
+    settings.intercept_mode = (intercept_mode != 0) ? 1 : 0;
     settings.sqtt_size = SqttProfile::GetSize();
     settings.sqtt_local = SqttProfile::IsLocal() ? 1: 0;
     settings.timeout = util::HsaRsrcFactory::GetTimeoutNs();
@@ -173,11 +176,11 @@ bool LoadTool() {
     if (handler) handler();
     else if (handler_prop) handler_prop(&settings);
 
-    intercept_mode = (settings.intercept_mode != 0);
     SqttProfile::SetSize(settings.sqtt_size);
     SqttProfile::SetLocal(settings.sqtt_local != 0);
     util::HsaRsrcFactory::SetTimeoutNs(settings.timeout);
     InterceptQueue::TrackerOn(settings.timestamp_on != 0);
+    if (settings.intercept_mode != 0) intercept_mode = DISPATCH_INTERCEPT_MODE;
   }
 
   return intercept_mode;
@@ -313,6 +316,9 @@ hsa_status_t CreateQueuePro(
 rocprofiler_properties_t rocprofiler_properties;
 uint32_t SqttProfile::output_buffer_size_ = 0x2000000;  // 32M
 bool SqttProfile::output_buffer_local_ = true;
+Tracker* Tracker::instance_ = NULL;
+Tracker::mutex_t Tracker::glob_mutex_;
+Tracker::counter_t Tracker::counter_ = 0;
 util::Logger::mutex_t util::Logger::mutex_;
 util::Logger* util::Logger::instance_ = NULL;
 }
@@ -355,8 +361,8 @@ PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, uint64_t fa
   }
 
   // Loading a tool lib and setting of intercept mode
-  const bool intercept_mode_on = rocprofiler::LoadTool();
-  if (intercept_mode_on) intercept_mode = true;
+  const uint32_t intercept_mode_mask = rocprofiler::LoadTool();
+  if (intercept_mode_mask & rocprofiler::DISPATCH_INTERCEPT_MODE) intercept_mode = true;
 
   // HSA intercepting
   if (intercept_mode) {
@@ -371,6 +377,7 @@ PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, uint64_t fa
 
 // HSA-runtime tool on-unload method
 PUBLIC_API void OnUnload() {
+  rocprofiler::Tracker::Destroy();
   rocprofiler::UnloadTool();
   rocprofiler::RestoreHsaApi();
 }
