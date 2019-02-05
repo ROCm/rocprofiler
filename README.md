@@ -108,9 +108,12 @@ Options:
   --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
 
-  --stats - generating kernel executino stats
+  --stats - generating kernel executino stats, file <output name>.stats.csv
   --hsa-trace - to trace HSA, generates API execution stats and JSON file viewable in chrome tracing
+    Generated files: <output name>.hsa_stats.txt <output name>.json
   --hip-trace - to trace HIP, generates API execution stats and JSON file viewable in chrome tracing
+    Generated files: <output name>.hip_stats.txt <output name>.json
+
 
 Configuration file:
   You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:/home/evgeny:<package path>
