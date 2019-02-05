@@ -6,7 +6,7 @@ HW specific low-level performance analysis interface for profiling of GPU comput
 
 The library source tree:
  - bin
-   - rpl_run.sh - Profiling tool run script
+   - rocprof - Profiling tool run script
  - doc - Documentation
  - inc/rocprofiler.h - Library public API
  - src  - Library sources
@@ -34,7 +34,7 @@ The library source tree:
   cd .../rocprofiler
   mkdir build
   cd build
-  export CMAKE_PREFIX_PATH=/opt/rocm/lib:/opt/rocm/include/hsa
+  export CMAKE_PREFIX_PATH=/opt/rocm
   cmake -DCMAKE_INSTALL_PREFIX=/opt/rocm ..
   make
   make install
