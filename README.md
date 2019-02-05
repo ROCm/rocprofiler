@@ -108,9 +108,10 @@ Options:
   --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
 
-  --hip-trace - to trace HIP, generates API execution stats and JSON file viewable in chrome tracing
+  --hsa-trace - to trace HSA, generates API execution stats and JSON file viewable in chrome tracing
     Requires to set three options '--hsa-trace --stats --timestamp on'
     Will be simplified to just one option in the next release
+    Generated files: <output name>.stats.csv <output name>.hsa_trace.txt <output name>.json
 
 Configuration file:
   You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:/home/evgeny:<package path>
