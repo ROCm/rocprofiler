@@ -143,6 +143,7 @@ usage() {
   echo "  --hsa-trace - to trace HSA, generates API execution stats and JSON file viewable in chrome tracing"
   echo "    Requires to set three options '--hsa-trace --stats --timestamp on'"
   echo "    Will be simplified to just one option in the next release"
+  echo "    Generated files: <output name>.stats.csv <output name>.hsa_stats.txt <output name>.json"
   echo ""
   echo "Configuration file:"
   echo "  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:${HOME}:<package path>"
