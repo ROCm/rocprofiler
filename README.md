@@ -108,6 +108,7 @@ Options:
   --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
 
+  --stats - generating kernel execution stats, file <output name>.stats.csv
   --hsa-trace - to trace HSA, generates API execution stats and JSON file viewable in chrome tracing
     Requires to set three options '--hsa-trace --stats --timestamp on'
     Will be simplified to just one option in the next release
