@@ -115,8 +115,14 @@ Options:
   --stats - generating kernel executino stats, file <output name>.stats.csv
   --hsa-trace - to trace HSA, generates API execution stats and JSON file viewable in chrome tracing
     Generated files: <output name>.hsa_stats.txt <output name>.json
-  --hip-trace - to trace HIP, generates API execution stats and JSON file viewable in chrome tracing
-    Generated files: <output name>.hip_stats.txt <output name>.json
+    Traced API list can be set by input .txt or .xml files.
+    Input .txt:
+      hsa: hsa_queue_create hsa_amd_memory_pool_allocate
+    Input .xml:
+      <trace name="HSA">
+        <parameters list="hsa_queue_create, hsa_amd_memory_pool_allocate">
+        </parameters>
+      </trace>
 
 Configuration file:
   You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:/home/evgeny:<package path>
