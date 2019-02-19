@@ -4,7 +4,10 @@ ROC profiler library. Profiling with perf-counters and derived metrics. Library 
 
 HW specific low-level performance analysis interface for profiling of GPU compute applications. The profiling includes HW performance counters with complex performance metrics and HW traces
 
-The library source tree:
+[Profiler default metrics](test/tool/metrics.xml)
+
+## Source tree:
+```
  - bin
    - rocprof - Profiling tool run script
  - doc - Documentation
@@ -20,6 +23,7 @@ The library source tree:
    - ctrl - Test controll
    - util - Test utils
    - simple_convolution - Simple convolution test kernel
+```
 
 ## Build environment:
 ```
