@@ -6,9 +6,9 @@ HW specific low-level performance analysis interface for profiling of GPU comput
 profiling includes HW performance counters with complex performance metrics and HW traces.
 There two usage modes for counters access, system wide sampling and per kernels accumulating. In per
 kernel usage mode the kernels execution is serialized.
-
-[The link to profiler default metrics XML specification](test/tool/metrics.xml)
 ```
+[The link to profiler default metrics XML specification](test/tool/metrics.xml)
+
 
 ## Source tree:
 ```
