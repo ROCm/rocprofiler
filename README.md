@@ -113,7 +113,8 @@ Options:
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
 
   --stats - generating kernel executino stats, file <output name>.stats.csv
-  --hsa-trace - to trace HSA, generates API execution stats and JSON file viewable in chrome tracing
+  --hip-trace - to trace HIP, generates API execution stats/trace and JSON file viewable in chrome tracing
+  --hsa-trace - to trace HSA, generates API execution stats/trace and JSON file viewable in chrome tracing
     Generated files: <output name>.hsa_stats.txt <output name>.json
     Traced API list can be set by input .txt or .xml files.
     Input .txt:
