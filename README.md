@@ -1,10 +1,8 @@
 # ROC-profiler
-```
 ROC profiler library. Profiling with perf-counters and derived metrics. Library supports GFX8/GFX9.
 
 HW specific low-level performance analysis interface for profiling of GPU compute applications. The
 profiling includes HW performance counters with complex performance metrics.
-```
 
 ## Metrics
 [The link to profiler default metrics XML specification](test/tool/metrics.xml)
