@@ -8,7 +8,7 @@ profiling includes HW performance counters with complex performance metrics.
 [The link to profiler default metrics XML specification](test/tool/metrics.xml)
 
 
-## Source tree:
+## Source tree
 ```
  - bin
    - rocprof - Profiling tool run script
