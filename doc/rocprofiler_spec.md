@@ -14,7 +14,7 @@ The library has C API and is based on AQLprofile AMD specific HSA extension.
   1. The library provides methods to query the list of supported HW features.
   2. The library provides profiling APIs to start, stop, read metrics results and tracing
   data.
-  3. The library provides a callback API for collecting per-kernel profiling data for
+  3. The library provides a intercepting API for collecting per-kernel profiling data for
   the kernels
   dispatched to HSA AQL queues.
   4. The library provides mechanism to load profiling tool library plugin by env variable
@@ -427,6 +427,7 @@ hsa_status_t rocprofiler_group_get_data(
 ```
 The library provides a callback API for enabling profiling for the kernels dispatched to
 HSA AQL queues. The API enables per-kernel profiling data collection.
+Currently implemented the option with serializing the kernels execution.
 
 ROC profiler callback type:
 
