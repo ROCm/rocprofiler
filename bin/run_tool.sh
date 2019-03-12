@@ -27,7 +27,7 @@ fi
 export HSA_TOOLS_REPORT_LOAD_FAILURE=1
 export HSA_VEN_AMD_AQLPROFILE_LOG=1
 export ROCPROFILER_LOG=1
-# to prevent internal simple proxy queue
+# ROC profiler metrics config file
 unset ROCP_PROXY_QUEUE
 # ROC profiler metrics config file
 export ROCP_METRICS=$BIN_DIR/lib/metrics.xml

@@ -178,7 +178,7 @@ int main() {
   TestHsa::HsaInstantiate(0);
 
   for (unsigned ind = 0; ind < kiter; ++ind) {
-    printf("Iteration %u:\n", ind);
+    printf("Iterastion %u:\n", ind);
     ret_val = RunKernel<DummyKernel, TestAql>(0, NULL, diter);
     if (ret_val) ret_val = RunKernel<SimpleConvolution, TestAql>(0, NULL, diter);
   }
