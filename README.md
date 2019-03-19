@@ -110,7 +110,7 @@ Options:
       By changing the temporary directory you can prevent removing the profiling data from /tmp or enable removing from not '/tmp' directory.
 
   --basenames <on|off> - to turn on/off truncating of the kernel full function names till the base ones [off]
-  --timestamp <on|off> - to turn on/off the kernel disoatches timestamps, dispatch/begin/end/complete [off]
+  --timestamp <on|off> - to turn on/off the kernel dispatches timestamps, dispatch/begin/end/complete [off]
   --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
 
