@@ -123,7 +123,7 @@ Options:
       hsa: hsa_queue_create hsa_amd_memory_pool_allocate
     Input .xml:
       <trace name="HSA">
-        <parameters list="hsa_queue_create, hsa_amd_memory_pool_allocate">
+        <parameters api="hsa_queue_create, hsa_amd_memory_pool_allocate">
         </parameters>
       </trace>
 
