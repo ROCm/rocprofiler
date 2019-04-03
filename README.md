@@ -116,6 +116,7 @@ Options:
 
   --stats - generating kernel executino stats, file <output name>.stats.csv
   --hip-trace - to trace HIP, generates API execution stats/trace and JSON file viewable in chrome tracing
+    'HCC_HOME' env va is required to be set to where 'hcc' is installed.
   --hsa-trace - to trace HSA, generates API execution stats/trace and JSON file viewable in chrome tracing
     Generated files: <output name>.hsa_stats.txt <output name>.json
     Traced API list can be set by input .txt or .xml files.
