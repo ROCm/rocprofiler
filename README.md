@@ -40,8 +40,8 @@ profiling includes HW performance counters with complex performance metrics.
   cd .../rocprofiler
   mkdir build
   cd build
-  export CMAKE_PREFIX_PATH=/opt/rocm
-  cmake -DCMAKE_INSTALL_PREFIX=/opt/rocm ..
+  export CMAKE_PREFIX_PATH=/opt/rocm/include/hsa:/opt/rocm
+  cmake ..
   make
   make install
 ```
