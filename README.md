@@ -119,8 +119,8 @@ Options:
       sgpr - the kernel's SGPR size
       fbar - the kernel's barriers limitation
       sig - the kernel's completion signal
-      The columns with the counters values per kernel dispatch
-      DispatchNs/BeginNs/EndNs/CompleteNs timestamp columns if time-stamping was enabled
+      ... - The columns with the counters values per kernel dispatch
+      DispatchNs/BeginNs/EndNs/CompleteNs - timestamp columns if time-stamping was enabled
       
   -d <data directory> - directory where profiler store profiling data including thread treaces [/tmp]
       The data directory is renoving autonatically if the directory is matching the temporary one, which is the default.
