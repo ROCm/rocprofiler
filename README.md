@@ -129,6 +129,12 @@ Options:
 
   --basenames <on|off> - to turn on/off truncating of the kernel full function names till the base ones [off]
   --timestamp <on|off> - to turn on/off the kernel dispatches timestamps, dispatch/begin/end/complete [off]
+    Four kernel timestamps in nanoseconds are reported:
+        DispatchNs - the time when the kernel AQL dispatch packet was written to the queue
+        BeginNs - the kernel execution begin time
+        EndNs - the kernel execution end time
+        CompleteNs - the time when the completion signal of the AQL dispatch packet was received
+
   --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
 
