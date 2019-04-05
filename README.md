@@ -104,6 +104,24 @@ Options:
         ></metric>
 
   -o <output file> - output CSV file [<input file base>.csv]
+    The output CSV file columns meaning in the columns order:
+      Index - kernels dispatch order index
+      KernelName - the dispatched kernel name
+      gpu-id - GPU id the kernel was submitted to
+      queue-id - the ROCm queue unique id the kernel was submitted to
+      queue-index - The ROCm queue write index for the submitted AQL packet
+      tid - system application thread id which submitted the kernel
+      grd - the kernel's grid size
+      wgr - the kernel's work group size
+      lds - the kernel's LDS memory size
+      scr - the kernel's scratch memory size
+      vgpr - the kernel's VGPR size
+      sgpr - the kernel's SGPR size
+      fbar - the kernel's barriers limitation
+      sig - the kernel's completion signal
+      The columns with the counters values per kernel dispatch
+      DispatchNs/BeginNs/EndNs/CompleteNs timestamp columns if time-stamping was enabled
+      
   -d <data directory> - directory where profiler store profiling data including thread treaces [/tmp]
       The data directory is renoving autonatically if the directory is matching the temporary one, which is the default.
   -t <temporary directory> - to change the temporary directory [/tmp]
