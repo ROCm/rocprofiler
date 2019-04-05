@@ -28,6 +28,7 @@ THE SOFTWARE.
 #include <vector>
 
 #include "core/context.h"
+#include "core/context_pool.h"
 #include "core/hsa_queue.h"
 #include "core/intercept_queue.h"
 #include "core/proxy_queue.h"
@@ -89,6 +90,8 @@ decltype(hsa_amd_memory_async_copy_rect)* hsa_amd_memory_async_copy_rect_fn;
 ::HsaApiTable* kHsaApiTable;
 
 void SaveHsaApi(::HsaApiTable* table) {
+  util::HsaRsrcFactory::InitHsaApiTable(table);
+
   kHsaApiTable = table;
   hsa_queue_create_fn = table->core_->hsa_queue_create_fn;
   hsa_queue_destroy_fn = table->core_->hsa_queue_destroy_fn;
@@ -230,11 +233,12 @@ hsa_status_t GetExcStatus(const std::exception& e) {
                                : HSA_STATUS_ERROR;
 }
 
-inline size_t CreateEnableCmd(const rocprofiler::util::AgentInfo* agent_info, packet_t* command, const size_t& slot_count) {
+
+inline size_t CreateEnableCmd(const hsa_agent_t& agent, packet_t* command, const size_t& slot_count) {
+  rocprofiler::util::HsaRsrcFactory* hsa_rsrc = &rocprofiler::util::HsaRsrcFactory::Instance();
+  const rocprofiler::util::AgentInfo* agent_info = hsa_rsrc->GetAgentInfo(agent);
   const bool is_legacy = (strncmp(agent_info->name, "gfx8", 4) == 0);
   const size_t packet_count = (is_legacy) ? Profile::LEGACY_SLOT_SIZE_PKT : 1;
-
-  rocprofiler::util::HsaRsrcFactory* hsa_rsrc = &rocprofiler::util::HsaRsrcFactory::Instance();
 
   if (packet_count > slot_count) EXC_RAISING(HSA_STATUS_ERROR, "packet_count > slot_count");
 
@@ -287,13 +291,9 @@ hsa_status_t CreateQueuePro(
     uint32_t group_segment_size,
     hsa_queue_t **queue)
 {
-  typedef std::pair<packet_t[Profile::LEGACY_SLOT_SIZE_PKT], uint32_t> cmd_entry_t;
-  typedef std::vector<cmd_entry_t> cmd_vec_t;
-  static cmd_vec_t cmd_vec;
-  static uint32_t cmd_mask = 0;
-  static std::mutex cmd_mutex;
-
-  rocprofiler::util::HsaRsrcFactory* hsa_rsrc = &rocprofiler::util::HsaRsrcFactory::Instance();
+  static packet_t enable_cmd_packet[Profile::LEGACY_SLOT_SIZE_PKT];
+  static size_t enable_cmd_size = 0;
+  static std::mutex enable_cmd_mutex;
 
   // Create HSA queue
   hsa_status_t status = hsa_queue_create_fn(
@@ -308,30 +308,15 @@ hsa_status_t CreateQueuePro(
   if (status != HSA_STATUS_SUCCESS) return status;
 
   // Create 'Enable' cmd packet
-  const rocprofiler::util::AgentInfo* agent_info = hsa_rsrc->GetAgentInfo(agent);
-  const uint32_t dev_index = 1 << agent_info->dev_index;
-  const uint32_t dev_mask = 1 << dev_index;
-  if ((cmd_mask & dev_mask) == 0) {
-    std::lock_guard<std::mutex> lck(cmd_mutex);
-
-    if ((cmd_mask & dev_mask) == 0) {
-      cmd_mask |= dev_mask;
-      // Allocating cmd vector
-      uint32_t mask = 1;
-      while (1) {
-        const uint32_t max = 1 << cmd_vec.size();
-        if (mask >= max) cmd_vec.push_back({});
-        if (((mask & dev_mask) != 0) || (mask == 0)) break;
-        mask <<= 1;
-      }
-      if (mask == 0) EXC_RAISING(status, "bad device index (" << dev_index << ")");
-      // Creating cmd packets
-      cmd_vec[dev_index].second = CreateEnableCmd(agent_info, cmd_vec[dev_index].first, Profile::LEGACY_SLOT_SIZE_PKT);
+  if (enable_cmd_size == 0) {
+    std::lock_guard<std::mutex> lck(enable_cmd_mutex);
+    if (enable_cmd_size == 0) {
+      enable_cmd_size = CreateEnableCmd(agent, enable_cmd_packet, Profile::LEGACY_SLOT_SIZE_PKT);
     }
   }
 
   // Enable counters for the queue
-  rocprofiler::util::HsaRsrcFactory::Instance().Submit(*queue, cmd_vec[dev_index].first, cmd_vec[dev_index].second);
+  rocprofiler::util::HsaRsrcFactory::Instance().Submit(*queue, enable_cmd_packet, enable_cmd_size);
 
   return HSA_STATUS_SUCCESS;
 }
@@ -383,11 +368,11 @@ hsa_status_t hsa_amd_memory_async_copy_rect_interceptor(
 rocprofiler_properties_t rocprofiler_properties;
 uint32_t SqttProfile::output_buffer_size_ = 0x2000000;  // 32M
 bool SqttProfile::output_buffer_local_ = true;
-Tracker* Tracker::instance_ = NULL;
+std::atomic<Tracker*> Tracker::instance_{};
 Tracker::mutex_t Tracker::glob_mutex_;
 Tracker::counter_t Tracker::counter_ = 0;
 util::Logger::mutex_t util::Logger::mutex_;
-util::Logger* util::Logger::instance_ = NULL;
+std::atomic<util::Logger*> util::Logger::instance_{};
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -494,8 +479,9 @@ PUBLIC_API hsa_status_t rocprofiler_open(hsa_agent_t agent, rocprofiler_feature_
     }
   }
 
-  *handle = new rocprofiler::Context(agent_info, queue, features, feature_count, properties->handler,
-                                     properties->handler_arg);
+  rocprofiler::Context** context_ret = reinterpret_cast<rocprofiler::Context**>(handle);
+  *context_ret = rocprofiler::Context::Create(agent_info, queue, features, feature_count,
+                                              properties->handler, properties->handler_arg);
   API_METHOD_SUFFIX
 }
 
@@ -503,7 +489,7 @@ PUBLIC_API hsa_status_t rocprofiler_open(hsa_agent_t agent, rocprofiler_feature_
 PUBLIC_API hsa_status_t rocprofiler_close(rocprofiler_t* handle) {
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
-  if (context) delete context;
+  if (context) rocprofiler::Context::Destroy(context);
   API_METHOD_SUFFIX
 }
 
@@ -625,6 +611,64 @@ PUBLIC_API hsa_status_t rocprofiler_iterate_trace_data(
   API_METHOD_SUFFIX
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Open profiling pool
+PUBLIC_API hsa_status_t rocprofiler_pool_open(hsa_agent_t agent,        // GPU handle
+                                   rocprofiler_feature_t* features,     // [in] profiling features array
+                                   uint32_t feature_count,              // profiling info count
+                                   rocprofiler_pool_t** pool,           // [out] context object
+                                   uint32_t mode,                       // profiling mode mask
+                                   rocprofiler_pool_properties_t* properties)  // pool properties
+{
+  API_METHOD_PREFIX
+  rocprofiler::util::HsaRsrcFactory* hsa_rsrc = &rocprofiler::util::HsaRsrcFactory::Instance();
+  const rocprofiler::util::AgentInfo* agent_info = hsa_rsrc->GetAgentInfo(agent);
+  if (agent_info == NULL) {
+    EXC_RAISING(HSA_STATUS_ERROR, "agent is not found");
+  }
+
+  rocprofiler::ContextPool* obj = rocprofiler::ContextPool::Create(
+    properties->num_entries,
+    properties->payload_bytes,
+    agent_info,
+    features,
+    feature_count,
+    properties->handler,
+    properties->handler_arg
+  );
+  *pool = reinterpret_cast<rocprofiler_pool_t*>(obj);
+  API_METHOD_SUFFIX
+}
+
+// Close profiling pool
+PUBLIC_API hsa_status_t rocprofiler_pool_close(rocprofiler_pool_t* pool)  // profiling pool handle
+{
+  API_METHOD_PREFIX
+  rocprofiler::ContextPool* obj = reinterpret_cast<rocprofiler::ContextPool*>(pool);
+  rocprofiler::ContextPool::Destroy(obj);
+  API_METHOD_SUFFIX
+}
+
+// Fetch profiling pool entry
+PUBLIC_API hsa_status_t rocprofiler_pool_fetch(rocprofiler_pool_t* pool,  // profiling pool handle
+                                    rocprofiler_pool_entry_t* entry)      // [out] empty profling pool entry
+{
+  API_METHOD_PREFIX
+  rocprofiler::ContextPool* context_pool = reinterpret_cast<rocprofiler::ContextPool*>(pool);
+  context_pool->Fetch(entry);
+  API_METHOD_SUFFIX
+}
+
+// Fetch profiling pool entry
+PUBLIC_API hsa_status_t rocprofiler_pool_flush(rocprofiler_pool_t* pool)  // profiling pool handle
+{
+  API_METHOD_PREFIX
+  rocprofiler::ContextPool* context_pool = reinterpret_cast<rocprofiler::ContextPool*>(pool);
+  context_pool->Flush();
+  API_METHOD_SUFFIX
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Return the info for a given info kind
 PUBLIC_API hsa_status_t rocprofiler_get_info(
   const hsa_agent_t *agent,
@@ -687,6 +731,7 @@ PUBLIC_API hsa_status_t rocprofiler_iterate_info(
           info.metric.name = strdup(name.c_str());
           info.metric.description = strdup(descr.c_str());
           info.metric.expr = expr.empty() ? NULL : strdup(expr.c_str());
+          info.metric.instances = 1;
 
           if (expr.empty()) {
             // Getting the block name

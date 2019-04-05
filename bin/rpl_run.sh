@@ -142,6 +142,7 @@ usage() {
   echo ""
   echo "  --stats - generating kernel execution stats, file <output name>.stats.csv"
   echo "  --hsa-trace - to trace HSA, generates API execution stats and JSON file chrome-tracing compatible"
+  echo "  --hip-trace - to trace HIP, generates API execution stats and JSON file chrome-tracing compatible"
   echo "    Generated files: <output name>.hsa_stats.txt <output name>.json"
   echo "    Traced API list can be set by input .txt or .xml files."
   echo "    Input .txt:"
@@ -302,6 +303,7 @@ while [ 1 ] ; do
     HSA_TRACE=1
   elif [ "$1" = "--hip-trace" ] ; then
     ARG_VAL=0
+    export ROCP_TIMESTAMP_ON=1
     GEN_STATS=1
     HIP_TRACE=1
   elif [ "$1" = "--verbose" ] ; then

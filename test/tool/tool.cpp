@@ -309,7 +309,7 @@ struct trace_data_arg_t {
   hsa_agent_t agent;
 };
 
-// Trace data callback for getting trace data from GPU local mamory
+// Trace data callback for getting trace data from GPU local memory
 hsa_status_t trace_data_cb(hsa_ven_amd_aqlprofile_info_type_t info_type,
                            hsa_ven_amd_aqlprofile_info_data_t* info_data, void* data) {
   hsa_status_t status = HSA_STATUS_SUCCESS;
@@ -616,7 +616,7 @@ hsa_status_t dispatch_callback(const rocprofiler_callback_data_t* callback_data,
   kernel_properties_ptr->vgpr_count = kernel_code->reserved_vgpr_count;
   kernel_properties_ptr->sgpr_count = kernel_code->reserved_sgpr_count;
   kernel_properties_ptr->fbarrier_count = kernel_code->workgroup_fbarrier_count;
-  kernel_properties_ptr->signal = packet->completion_signal;
+  kernel_properties_ptr->signal = callback_data->completion_signal;
 
   // context properties
   rocprofiler_properties_t properties{};

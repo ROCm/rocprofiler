@@ -26,8 +26,9 @@ THE SOFTWARE.
 //
 // The goal of the implementation is to provide a HW specific low-level
 // performance analysis interface for profiling of GPU compute applications.
-// The profiling includes HW performance counters with derived
-// performance metrics.
+// The profiling includes HW performance counters (PMC) with complex
+// performance metrics and thread traces (SQTT). The profiling is supported
+// by the SQTT, PMC and Callback APIs.
 //
 // The library can be used by a tool library loaded by HSA runtime or by
 // higher level HW independent performance analysis API like PAPI.
@@ -46,7 +47,7 @@ THE SOFTWARE.
 #include <hsa_ven_amd_aqlprofile.h>
 #include <stdint.h>
 
-#define ROCPROFILER_VERSION_MAJOR 6
+#define ROCPROFILER_VERSION_MAJOR 7
 #define ROCPROFILER_VERSION_MINOR 0
 
 #ifdef __cplusplus
@@ -219,6 +220,7 @@ typedef struct {
   const hsa_queue_t* queue;                            // HSA queue
   uint64_t queue_index;                                // Index in the queue
   uint32_t queue_id;                                   // Queue id
+  hsa_signal_t completion_signal;                      // Completion signal
   const hsa_kernel_dispatch_packet_t* packet;          // HSA dispatch packet
   const char* kernel_name;                             // Kernel name
   uint64_t kernel_object;                              // Kernel object pointer
@@ -381,6 +383,66 @@ hsa_status_t rocprofiler_queue_create_profiled(
   void* data, uint32_t private_segment_size, uint32_t group_segment_size,
   hsa_queue_t** queue);
 
+////////////////////////////////////////////////////////////////////////////////
+// Profiling pool
+//
+// Support for profiling contexts pool
+// The API provide capability to create a contexts pool for a given agent and a set of features,
+// to fetch/relase a context entry, to register a callback for the contexts completion.
+
+// Profiling pool handle
+typedef void rocprofiler_pool_t;
+
+// Profiling pool entry
+typedef struct {
+  rocprofiler_t* context;             // context object
+  void* payload;                      // payload data object
+} rocprofiler_pool_entry_t;
+
+// Profiling handler, calling on profiling completion
+typedef bool (*rocprofiler_pool_handler_t)(const rocprofiler_pool_entry_t* entry, void* arg);
+
+// Profiling preperties
+typedef struct {
+  uint32_t num_entries;                // pool size entries
+  uint32_t payload_bytes;              // payload size bytes
+  rocprofiler_pool_handler_t handler;  // handler on context completion
+  void* handler_arg;                   // the handler arg
+} rocprofiler_pool_properties_t;
+
+// Open profiling pool
+hsa_status_t rocprofiler_pool_open(
+  hsa_agent_t agent,                   // GPU handle
+  rocprofiler_feature_t* features,     // [in] profiling features array
+  uint32_t feature_count,              // profiling info count
+  rocprofiler_pool_t** pool,           // [out] context object
+  uint32_t mode,                       // profiling mode mask
+  rocprofiler_pool_properties_t*);     // pool properties
+
+// Close profiling pool
+hsa_status_t rocprofiler_pool_close(
+  rocprofiler_pool_t* pool);          // profiling pool handle
+
+// Fetch profiling pool entry
+hsa_status_t rocprofiler_pool_fetch(
+  rocprofiler_pool_t* pool,           // profiling pool handle
+  rocprofiler_pool_entry_t* entry);   // [out] empty profiling pool entry
+
+// Release profiling pool entry
+hsa_status_t rocprofiler_pool_release(
+  rocprofiler_pool_entry_t* entry);   // released profiling pool entry
+
+// Iterate fetched profiling pool entries
+hsa_status_t rocprofiler_pool_iterate(
+  rocprofiler_pool_t* pool,           // profiling pool handle
+  hsa_status_t (*callback)(rocprofiler_pool_entry_t* entry, void* data), // callback
+  void *data); // [in/out] data passed to callback
+
+// Flush completed entries in profiling pool
+hsa_status_t rocprofiler_pool_flush(
+  rocprofiler_pool_t* pool);          // profiling pool handle
+
+////////////////////////////////////////////////////////////////////////////////
 #ifdef __cplusplus
 }  // extern "C" block
 #endif  // __cplusplus
