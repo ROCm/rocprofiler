@@ -43,7 +43,7 @@ HIP_TRACE=0
 # Generate stats
 GEN_STATS=0
 
-export LD_LIBRARY_PATH=$PKG_DIR/lib:$PKG_DIR/tool:$ROCTRACER_PATH/lib:$ROCTRACER_PATH/tool:$HSA_PATH
+export LD_LIBRARY_PATH=$PKG_DIR/lib:$PKG_DIR/tool:$ROCTRACER_PATH/lib:$ROCTRACER_PATH/tool:$HSA_PATH:$LD_LIBRARY_PATH
 export PATH=.:$PATH
 
 # enable error logging
