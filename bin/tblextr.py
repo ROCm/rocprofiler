@@ -118,12 +118,14 @@ def parse_res(infile):
           dep_str = dep_dict[gpu_pid]
           if not 'tid' in dep_str: dep_str['tid'] = []
           if not 'from' in dep_str: dep_str['from'] = []
+          if not 'from_ns' in dep_str: dep_str['from_ns'] = []
           if not 'to' in dep_str: dep_str['to'] = {}
           to_id = len(dep_str['tid'])
           from_us = int(m.group(1)) / 1000
           to_us = int(m.group(2)) / 1000
           dep_str['to'][to_id] = to_us
           dep_str['from'].append(from_us)
+          dep_str['from_ns'].append(int(m.group(1)))
           dep_str['tid'].append(disp_tid)
           dep_str['pid'] = HSA_PID
           kern_dep_list.append((disp_tid, m.group(1)))
@@ -193,6 +195,7 @@ def fill_api_db(table_name, db, indir, api_name, api_pid, dep_pid, dep_list, dep
 
   dep_tid_list = []
   dep_from_us_list = []
+  dep_from_ns_list = []
   dep_id_list = []
 
   global START_US
@@ -221,6 +224,7 @@ def fill_api_db(table_name, db, indir, api_name, api_pid, dep_pid, dep_list, dep
           end_ns = int(rec_vals[1])
           from_us = (beg_ns / 1000) + ((end_ns - beg_ns) / 1000)
           dep_from_us_list.append(from_us)
+          dep_from_ns_list.append(beg_ns)
           dep_tid_list.append(int(rec_vals[3]))
           dep_id_list.append(record_id) 
         record_id += 1
@@ -234,6 +238,7 @@ def fill_api_db(table_name, db, indir, api_name, api_pid, dep_pid, dep_list, dep
   dep_dict[dep_pid]['pid'] = api_pid
   dep_dict[dep_pid]['tid'] = dep_tid_list
   dep_dict[dep_pid]['from'] = dep_from_us_list
+  dep_dict[dep_pid]['from_ns'] = dep_from_ns_list
   if expl_id: dep_dict[dep_pid]['id'] = dep_id_list
 
   return 1
@@ -413,7 +418,7 @@ else:
       to_us_dict = dep_str['to']
       corr_id_list = []
       if 'id' in dep_str: corr_id_list = dep_str['id']
-      db.flow_json(dep_id, from_pid, tid_list, from_us_list, to_pid, to_us_dict, corr_id_list, START_US, jsonfile)
+      db.flow_json(dep_id, from_pid, tid_list, from_us_list, dep_str['from_ns'], to_pid, to_us_dict, corr_id_list, START_US, jsonfile)
       dep_id += len(tid_list)
 
   if any_trace_found:

@@ -113,7 +113,7 @@ class SQLiteDB:
     with open(file_name, mode='a') as fd:
       fd.write(',{"args":{"name":"%s"},"ph":"M","pid":%s,"name":"process_name"}\n' %(label, pid));
 
-  def flow_json(self, base_id, from_pid, from_tid, from_us_list, to_pid, to_us_dict, corr_id_list, start_us, file_name):
+  def flow_json(self, base_id, from_pid, from_tid, from_us_list, from_ns_list, to_pid, to_us_dict, corr_id_list, start_us, file_name):
     if not re.search(r'\.json$', file_name):
       raise Exception('wrong output file type: "' + file_name + '"' )
     with open(file_name, mode='a') as fd:
@@ -124,7 +124,7 @@ class SQLiteDB:
         from_ts = from_us_list[ind] - start_us
         to_ts = to_us_dict[corr_id] - start_us
         if from_ts > to_ts: from_ts = to_ts
-        fd.write(',{"ts":%d,"ph":"s","cat":"DataFlow","id":%d,"pid":%s,"tid":%s,"name":"dep"}\n' % (from_ts, dep_id, str(from_pid), from_tid[ind]))
+        fd.write(',{"ts":%d,"ph":"s","cat":"DataFlow","id":%d,"pid":%s,"tid":%s,"name":"dep", "args": {"TimingNs":"%d"} }\n' % (from_ts, dep_id, str(from_pid), from_tid[ind], from_ns_list[ind]))
         fd.write(',{"ts":%d,"ph":"t","cat":"DataFlow","id":%d,"pid":%s,"tid":0,"name":"dep"}\n' % (to_ts, dep_id, str(to_pid)))
         dep_id += 1
 
