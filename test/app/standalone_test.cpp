@@ -104,6 +104,23 @@ int main() {
   feature[7].name = "TCC_MISS_sum";
   feature[8].kind = ROCPROFILER_FEATURE_KIND_METRIC;
   feature[8].name = "WRITE_SIZE";
+//  feature[8].kind = ROCPROFILER_FEATURE_KIND_METRIC;
+//  feature[8].name = "TCC_EA_WRREQ_sum";
+//  feature[9].kind = ROCPROFILER_FEATURE_KIND_METRIC;
+//  feature[9].name = "TCC_EA_WRREQ_64B_sum";
+#if 0
+  // Tracing parameters
+  const unsigned parameter_count = 2;
+  rocprofiler_parameter_t parameters[parameter_count];
+  feature[2].name = "THREAD_TRACE";
+  feature[2].kind = ROCPROFILER_FEATURE_KIND_TRACE;
+  feature[2].parameters = parameters;
+  feature[2].parameter_count = parameter_count;
+  parameters[0].parameter_name = HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_MASK;
+  parameters[0].value = 0;
+  parameters[1].parameter_name = HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK;
+  parameters[1].value = 0;
+#endif
 
   // Instantiate HSA resources
   HsaRsrcFactory::Create();
