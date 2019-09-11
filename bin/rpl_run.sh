@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 ################################################################################
 # Copyright (c) 2018 Advanced Micro Devices, Inc. All rights reserved.
@@ -348,10 +348,12 @@ else
 fi
 
 APP_CMD=""
-for i in `seq 1 $#`
-do
+for i in `seq 1 $#`; do
+  if [ -n "$APP_CMD" ] ; then
+    APP_CMD=$APP_CMD" "
+  fi
   eval "arg=\${$i}"
-  APP_CMD=$APP_CMD" "\"$arg\"
+  APP_CMD=$APP_CMD\"$arg\"
 done
 
 echo "RPL: profiling '$APP_CMD'"
