@@ -347,7 +347,12 @@ else
   csv_output=$RUN_DIR/${input_base}.csv
 fi
 
-APP_CMD=$*
+APP_CMD=""
+for i in `seq 1 $#`
+do
+  eval "arg=\${$i}"
+  APP_CMD=$APP_CMD" "\"$arg\"
+done
 
 echo "RPL: profiling '$APP_CMD'"
 echo "RPL: input file '$INPUT_FILE'"
