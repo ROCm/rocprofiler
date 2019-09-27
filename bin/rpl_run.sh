@@ -26,24 +26,32 @@ time_stamp=`date +%y%m%d_%H%M%S`
 BIN_DIR=$(dirname $(realpath $0))
 PKG_DIR=$(dirname $BIN_DIR)
 ROOT_DIR=$(dirname $PKG_DIR)
+TT_DIR=$ROOT_DIR/roctracer
 RUN_DIR=`pwd`
 TMP_DIR="/tmp"
 DATA_DIR="rpl_data_${time_stamp}_$$"
 
 RPL_PATH=$PKG_DIR/lib
 TLIB_PATH=$PKG_DIR/tool
+TTLIB_PATH=$TT_DIR/tool
 
-# PATH to custom HSA and OpenCl runtimes
-HSA_PATH=$PKG_DIR/lib/hsa
+# Default HIP path
+if [ -z "$HIP_PATH" ] ; then
+  export HIP_PATH=/opt/rocm/hip
+fi
+# Default HCC path
+if [ -z "$HCC_HOME" ] ; then
+  export HCC_HOME=/opt/rocm/hcc
+fi
 
 # runtime API trace
 HSA_TRACE=0
+SYS_TRACE=0
 HIP_TRACE=0
 
 # Generate stats
 GEN_STATS=0
 
-export LD_LIBRARY_PATH=$HSA_PATH:$LD_LIBRARY_PATH
 export PATH=.:$PATH
 
 # enable error logging
@@ -143,6 +151,7 @@ usage() {
   echo ""
   echo "  --stats - generating kernel execution stats, file <output name>.stats.csv"
   echo "  --hsa-trace - to trace HSA, generates API execution stats and JSON file chrome-tracing compatible"
+  echo "  --sys-trace - to trace HIP/HSA APIs and GPU activity, generates stats and JSON trace chrome-tracing compatible"
   echo "  --hip-trace - to trace HIP, generates API execution stats and JSON file chrome-tracing compatible"
   echo "    Generated files: <output name>.hsa_stats.txt <output name>.json"
   echo "    Traced API list can be set by input .txt or .xml files."
@@ -199,11 +208,16 @@ run() {
       fi
     fi
     mkdir -p "$ROCP_OUTPUT_DIR"
+
+    OUTPUT_LIST="$OUTPUT_LIST $ROCP_OUTPUT_DIR/results.txt"
   fi
 
   API_TRACE=""
   if [ "$HSA_TRACE" = 1 ] ; then
     API_TRACE="hsa"
+  fi
+  if [ "$SYS_TRACE" = 1 ] ; then
+    API_TRACE="sys"
   fi
   if [ "$HIP_TRACE" = 1 ] ; then
     if [ -z "$API_TRACE" ] ; then
@@ -215,18 +229,33 @@ run() {
   if [ -n "$API_TRACE" ] ; then
     API_TRACE=$(echo $API_TRACE | sed 's/all//')
     if [ -n "$API_TRACE" ] ; then export ROCTRACER_DOMAIN=$API_TRACE; fi
-    export HSA_TOOLS_LIB="$RPL_PATH/libroctracer64.so $TLIB_PATH/libtracer_tool.so $HSA_TOOLS_LIB"
+    if [ "$API_TRACE" = "hip" -o "$API_TRACE" = "sys" ] ; then
+      OUTPUT_LIST="$ROCP_OUTPUT_DIR/"
+    fi
+    export HSA_TOOLS_LIB="$TTLIB_PATH/libtracer_tool.so"
   fi
 
   redirection_cmd=""
   if [ -n "$ROCP_OUTPUT_DIR" ] ; then
-    OUTPUT_LIST="$OUTPUT_LIST $ROCP_OUTPUT_DIR/results.txt"
     redirection_cmd="2>&1 | tee $ROCP_OUTPUT_DIR/log.txt"
   fi
 
   #unset ROCP_OUTPUT_DIR
   CMD_LINE="$APP_CMD $redirection_cmd"
   eval "$CMD_LINE"
+}
+
+merge_output() {
+  output_dir=$(echo "$1" | sed "s/\/[^\/]*$//")
+  for file_name in `ls $output_dir` ; do
+    output_name=$(echo $file_name | sed -n "/\.txt$/ s/^[0-9]*_//p")
+    if [ -n "$output_name" ] ; then
+      trace_file=$output_dir/$file_name
+      output_file=$output_dir/$output_name
+      touch $output_file
+      cat $trace_file >> $output_file
+    fi
+  done
 }
 
 # main
@@ -301,6 +330,11 @@ while [ 1 ] ; do
     export ROCP_TIMESTAMP_ON=1
     GEN_STATS=1
     HSA_TRACE=1
+  elif [ "$1" = "--sys-trace" ] ; then
+    ARG_VAL=0
+    export ROCP_TIMESTAMP_ON=1
+    GEN_STATS=1
+    SYS_TRACE=1
   elif [ "$1" = "--hip-trace" ] ; then
     ARG_VAL=0
     export ROCP_TIMESTAMP_ON=1
@@ -398,6 +432,7 @@ done
 if [ -n "$csv_output" ] ; then
   if [ "$GEN_STATS" = "1" ] ; then
     db_output=$(echo $csv_output | sed "s/\.csv/.db/")
+    merge_output $OUTPUT_LIST
     python $BIN_DIR/tblextr.py $db_output $OUTPUT_LIST
   else
     python $BIN_DIR/tblextr.py $csv_output $OUTPUT_LIST
