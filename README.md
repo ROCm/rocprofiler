@@ -140,9 +140,6 @@ Options:
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
 
   --stats - generating kernel executino stats, file <output name>.stats.csv
-  --roctx-trace - to enable rocTX trace:
-    Will show the application code instrumentation rocTX events: roctxMark, roctxRangePush, roctxRangePop in JSON trace
-    "Markers and Ranges" section. Application code needs to be explicitely instrumented with rocTX events.
   --hip-trace - to trace HIP, generates API execution stats/trace and JSON file viewable in chrome tracing
     'HCC_HOME' env var is required to be set to where 'hcc' is installed.
   --hsa-trace - to trace HSA, generates API execution stats/trace and JSON file viewable in chrome tracing
@@ -155,6 +152,11 @@ Options:
         <parameters api="hsa_queue_create, hsa_amd_memory_pool_allocate">
         </parameters>
       </trace>
+ 
+  --roctx-trace - to enable rocTX applicatin code annotation trace; should be use in addition to the trace optins above.
+    Will show the application code annotation with rocTX events: roctxMark, roctxRangePush, roctxRangePop in JSON trace
+    "Markers and Ranges" section.
+    Application code needs to be explicitely instrumented using rocTX events APIs.
 
 Configuration file:
   You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:/home/evgeny:<package path>
