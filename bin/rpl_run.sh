@@ -45,6 +45,7 @@ if [ -z "$HCC_HOME" ] ; then
 fi
 
 # runtime API trace
+ROCTX_TRACE=0
 HSA_TRACE=0
 SYS_TRACE=0
 HIP_TRACE=0
@@ -142,7 +143,6 @@ usage() {
   echo "      The data directory is renoving autonatically if the directory is matching the temporary one, which is the default."
   echo "  -t <temporary directory> - to change the temporary directory [/tmp]"
   echo "      By changing the temporary directory you can prevent removing the profiling data from /tmp or enable removing from not '/tmp' directory."
-  echo "  -m <metric file> - file defining custom metrics to use in-place of defaults."
   echo ""
   echo "  --basenames <on|off> - to turn on/off truncating of the kernel full function names till the base ones [off]"
   echo "  --timestamp <on|off> - to turn on/off the kernel disoatches timestamps, dispatch/begin/end/complete [off]"
@@ -151,6 +151,7 @@ usage() {
   echo "  --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]"
   echo ""
   echo "  --stats - generating kernel execution stats, file <output name>.stats.csv"
+  echo "  --roctx-trace - to enable rocTX trace"
   echo "  --hsa-trace - to trace HSA, generates API execution stats and JSON file chrome-tracing compatible"
   echo "  --sys-trace - to trace HIP/HSA APIs and GPU activity, generates stats and JSON trace chrome-tracing compatible"
   echo "  --hip-trace - to trace HIP, generates API execution stats and JSON file chrome-tracing compatible"
@@ -214,23 +215,22 @@ run() {
   fi
 
   API_TRACE=""
-  if [ "$HSA_TRACE" = 1 ] ; then
-    API_TRACE="hsa"
+  if [ "$ROCTX_TRACE" = 1 ] ; then
+    API_TRACE=${API_TRACE}":roctx"
   fi
-  if [ "$SYS_TRACE" = 1 ] ; then
-    API_TRACE="sys"
+  if [ "$HSA_TRACE" = 1 ] ; then
+    API_TRACE=${API_TRACE}":hsa"
   fi
   if [ "$HIP_TRACE" = 1 ] ; then
-    if [ -z "$API_TRACE" ] ; then
-      API_TRACE="hip";
-    else
-      API_TRACE="all"
-    fi
+    API_TRACE=${API_TRACE}":hip"
   fi
+  if [ "$SYS_TRACE" = 1 ] ; then
+    API_TRACE=${API_TRACE}":sys"
+  fi
+
   if [ -n "$API_TRACE" ] ; then
-    API_TRACE=$(echo $API_TRACE | sed 's/all//')
-    if [ -n "$API_TRACE" ] ; then export ROCTRACER_DOMAIN=$API_TRACE; fi
-    if [ "$API_TRACE" = "hip" -o "$API_TRACE" = "sys" ] ; then
+    export ROCTRACER_DOMAIN=$API_TRACE
+    if [ "$HSA_TRACE" = 0 ] ; then
       OUTPUT_LIST="$ROCP_OUTPUT_DIR/"
     fi
     export HSA_TOOLS_LIB="$TTLIB_PATH/libtracer_tool.so"
@@ -241,7 +241,6 @@ run() {
     redirection_cmd="2>&1 | tee $ROCP_OUTPUT_DIR/log.txt"
   fi
 
-  #unset ROCP_OUTPUT_DIR
   CMD_LINE="$APP_CMD $redirection_cmd"
   eval "$CMD_LINE"
 }
@@ -259,6 +258,29 @@ merge_output() {
   done
 }
 
+convert_time_val() {
+  local time_maxumim_us=$((0xffffffff))
+  local __resultvar=$1
+  eval "local val=$"$__resultvar
+  val_m=`echo $val | sed -n "s/^\([0-9]*\)m$/\1/p"`
+  val_s=`echo $val | sed -n "s/^\([0-9]*\)s$/\1/p"`
+  val_ms=`echo $val | sed -n "s/^\([0-9]*\)ms$/\1/p"`
+  val_us=`echo $val | sed -n "s/^\([0-9]*\)us$/\1/p"`
+  if [ -n "$val_m" ] ; then val_us=$((val_m*60000000))
+  elif [ -n "$val_s" ] ; then val_us=$((val_s*1000000))
+  elif [ -n "$val_ms" ] ; then val_us=$((val_ms*1000))
+  fi
+
+  if [ -z "$val_us" ] ; then
+    error_message="invalid time value format ($val)"
+  elif [ "$val_us" -gt "$time_maxumim_us" ] ; then
+    error_message="time value exceeds maximum supported ($val > ${time_maxumim_us}us)"
+  else
+    eval $__resultvar="'$val_us'"
+  fi
+}
+
+################################################################################################
 # main
 echo "RPL: on '$time_stamp' from '$PKG_DIR' in '$RUN_DIR'"
 # Parsing arguments
@@ -289,9 +311,6 @@ while [ 1 ] ; do
     if [ "$OUTPUT_DIR" = "-" ] ; then
       DATA_PATH=$TMP_DIR
     fi
-  elif [ "$1" = "-m" ] ; then
-    unset ROCP_METRICS
-    export ROCP_METRICS="$2"
   elif [ "$1" = "--list-basic" ] ; then
     export ROCP_INFO=b
     eval "$PKG_DIR/tool/ctrl"
@@ -326,6 +345,9 @@ while [ 1 ] ; do
     ARG_VAL=0
     export ROCP_TIMESTAMP_ON=1
     GEN_STATS=1
+  elif [ "$1" = "--roctx-trace" ] ; then
+    ARG_VAL=0
+    ROCTX_TRACE=1
   elif [ "$1" = "--hsa-trace" ] ; then
     ARG_VAL=0
     export ROCP_TIMESTAMP_ON=1
