@@ -153,7 +153,7 @@ Options:
         </parameters>
       </trace>
  
-  --roctx-trace - to enable rocTX applicatin code annotation trace; should be use in addition to the trace optins above.
+  --roctx-trace - to enable rocTX applicatin code annotation trace; should be use in addition to the trace options above.
     Will show the application code annotation with rocTX events: roctxMark, roctxRangePush, roctxRangePop in JSON trace
     "Markers and Ranges" section.
     Application code needs to be explicitely instrumented using rocTX events APIs.
