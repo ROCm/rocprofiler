@@ -106,6 +106,7 @@ usage() {
   echo "  --verbose - verbose mode, dumping all base counters used in the input metrics"
   echo "  --list-basic - to print the list of basic HW counters"
   echo "  --list-derived - to print the list of derived metrics with formulas"
+  echo "  --cmd-qts <on|off> - quoting profiled cmd line [on]"
   echo ""
   echo "  -i <.txt|.xml file> - input file"
   echo "      Input file .txt format, automatically rerun application for every pmc line:"
@@ -143,6 +144,7 @@ usage() {
   echo "      The data directory is renoving autonatically if the directory is matching the temporary one, which is the default."
   echo "  -t <temporary directory> - to change the temporary directory [/tmp]"
   echo "      By changing the temporary directory you can prevent removing the profiling data from /tmp or enable removing from not '/tmp' directory."
+  echo "  -m <metric file> - file defining custom metrics to use in-place of defaults."
   echo ""
   echo "  --basenames <on|off> - to turn on/off truncating of the kernel full function names till the base ones [off]"
   echo "  --timestamp <on|off> - to turn on/off the kernel disoatches timestamps, dispatch/begin/end/complete [off]"
@@ -311,6 +313,9 @@ while [ 1 ] ; do
     if [ "$OUTPUT_DIR" = "-" ] ; then
       DATA_PATH=$TMP_DIR
     fi
+  elif [ "$1" = "-m" ] ; then
+    unset ROCP_METRICS
+    export ROCP_METRICS="$2"
   elif [ "$1" = "--list-basic" ] ; then
     export ROCP_INFO=b
     eval "$PKG_DIR/tool/ctrl"
@@ -366,6 +371,10 @@ while [ 1 ] ; do
   elif [ "$1" = "--verbose" ] ; then
     ARG_VAL=0
     export ROCP_VERBOSE_MODE=1
+  elif [ "$1" = "--cmd-qts" ] ; then
+    if [ "$2" = "off" ] ; then
+      CMD_QTS=0
+    fi
   else
     break
   fi
@@ -404,14 +413,18 @@ else
   csv_output=$RUN_DIR/${input_base}.csv
 fi
 
-APP_CMD=""
-for i in `seq 1 $#`; do
-  if [ -n "$APP_CMD" ] ; then
-    APP_CMD=$APP_CMD" "
-  fi
-  eval "arg=\${$i}"
-  APP_CMD=$APP_CMD\"$arg\"
-done
+# Profiled cmd line string
+APP_CMD=$*
+if [ "$CMD_QTS" = 1 ] ; then
+  APP_CMD=""
+  for i in `seq 1 $#`; do
+    if [ -n "$APP_CMD" ] ; then
+      APP_CMD=$APP_CMD" "
+    fi
+    eval "arg=\${$i}"
+    APP_CMD=$APP_CMD\"$arg\"
+  done
+fi
 
 echo "RPL: profiling '$APP_CMD'"
 echo "RPL: input file '$INPUT_FILE'"
