@@ -95,6 +95,8 @@ struct hsa_pfn_t {
   decltype(hsa_executable_load_agent_code_object)* hsa_executable_load_agent_code_object;
   decltype(hsa_executable_freeze)* hsa_executable_freeze;
   decltype(hsa_executable_get_symbol)* hsa_executable_get_symbol;
+  decltype(hsa_executable_symbol_get_info)* hsa_executable_symbol_get_info;
+  decltype(hsa_executable_iterate_symbols)* hsa_executable_iterate_symbols;
 
   decltype(hsa_system_get_info)* hsa_system_get_info;
   decltype(hsa_system_get_major_extension_table)* hsa_system_get_major_extension_table;
@@ -160,6 +162,11 @@ struct AgentInfo {
 
   // Number of Shader Arrays Per Shader Engines in Gpu
   uint32_t shader_arrays_per_se;
+
+  // SGPR/VGPR block sizes
+  uint32_t sgpr_block_dflt;
+  uint32_t sgpr_block_size;
+  uint32_t vgpr_block_size;
 };
 
 // HSA timer class
@@ -323,6 +330,11 @@ class HsaRsrcFactory {
   static uint64_t Submit(hsa_queue_t* queue, const void* packet);
   static uint64_t Submit(hsa_queue_t* queue, const void* packet, size_t size_bytes);
 
+  // Enable executables loading tracking
+  static bool IsExecutableTracking() { return executable_tracking_on_; }
+  static void EnableExecutableTracking(HsaApiTable* table);
+  static const char* GetKernelName(uint64_t addr);
+
   // Initialize HSA API table
   void static InitHsaApiTable(HsaApiTable* table);
   static const hsa_pfn_t* HsaApi() { return &hsa_api_; }
@@ -386,6 +398,13 @@ class HsaRsrcFactory {
 
   // System agents map
   std::map<hsa_agent_handle_t, const AgentInfo*> agent_map_;
+
+  // Executables loading tracking
+  typedef std::map<uint64_t, const char*> symbols_map_t;
+  static symbols_map_t* symbols_map_;
+  static bool executable_tracking_on_;
+  static hsa_status_t hsa_executable_freeze_interceptor(hsa_executable_t executable, const char *options);
+  static hsa_status_t executable_symbols_cb(hsa_executable_t exec, hsa_executable_symbol_t symbol, void *data);
 
   // HSA runtime API table
   static hsa_pfn_t hsa_api_;

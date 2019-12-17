@@ -473,19 +473,20 @@ bool dump_context_entry(context_entry_t* entry) {
   const uint32_t index = entry->index;
   FILE* file_handle = entry->file_handle;
   const std::string nik_name = (to_truncate_names == 0) ? entry->data.kernel_name : filtr_kernel_name(entry->data.kernel_name);
+  const AgentInfo* agent_info = HsaRsrcFactory::Instance().GetAgentInfo(entry->agent);
 
   fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), tid(%lu), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), kernel-name(\"%s\")",
     index,
-    HsaRsrcFactory::Instance().GetAgentInfo(entry->agent)->dev_index,
+    agent_info->dev_index,
     entry->data.queue_id,
     entry->data.queue_index,
     entry->data.thread_id,
     entry->kernel_properties.grid_size,
     entry->kernel_properties.workgroup_size,
-    entry->kernel_properties.lds_size,
+    (entry->kernel_properties.lds_size * (128 * 4)),
     entry->kernel_properties.scratch_size,
-    entry->kernel_properties.vgpr_count,
-    entry->kernel_properties.sgpr_count,
+    (entry->kernel_properties.vgpr_count + 1) * agent_info->vgpr_block_size,
+    (entry->kernel_properties.sgpr_count + agent_info->sgpr_block_dflt) * agent_info->sgpr_block_size,
     entry->kernel_properties.fbarrier_count,
     entry->kernel_properties.signal.handle,
     nik_name.c_str());
@@ -658,10 +659,10 @@ hsa_status_t dispatch_callback(const rocprofiler_callback_data_t* callback_data,
   uint64_t workgroup_size = packet->workgroup_size_x * packet->workgroup_size_y * packet->workgroup_size_z;
   if (workgroup_size > UINT32_MAX) abort();
   kernel_properties_ptr->workgroup_size = (uint32_t)workgroup_size;
-  kernel_properties_ptr->lds_size = packet->group_segment_size;
+  kernel_properties_ptr->lds_size = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc2, AMD_COMPUTE_PGM_RSRC_TWO_GRANULATED_LDS_SIZE); // packet->group_segment_size;
   kernel_properties_ptr->scratch_size = packet->private_segment_size;
-  kernel_properties_ptr->vgpr_count = kernel_code->reserved_vgpr_count;
-  kernel_properties_ptr->sgpr_count = kernel_code->reserved_sgpr_count;
+  kernel_properties_ptr->vgpr_count = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_GRANULATED_WORKITEM_VGPR_COUNT);
+  kernel_properties_ptr->sgpr_count = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_GRANULATED_WAVEFRONT_SGPR_COUNT);
   kernel_properties_ptr->fbarrier_count = kernel_code->workgroup_fbarrier_count;
   kernel_properties_ptr->signal = callback_data->completion_signal;
 
@@ -881,6 +882,8 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
       }
       it = opts.find("trace-local");
       if (it != opts.end()) { settings->trace_local = (it->second == "on"); }
+      it = opts.find("obj-tracking");
+      if (it != opts.end()) { settings->code_obj_tracking = (it->second == "on"); }
       it = opts.find("memcopies");
       if (it != opts.end()) { settings->memcopy_tracking = (it->second == "on"); }
     }
@@ -901,6 +904,8 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
   check_env_var("ROCP_TRACE_SIZE", settings->trace_size);
   // Set trace local buffer
   check_env_var("ROCP_TRACE_LOCAL", settings->trace_local);
+  // Set code objects tracking
+  check_env_var("ROCP_OBJ_TRACKING", settings->code_obj_tracking);
   // Set memcopies tracking
   check_env_var("ROCP_MCOPY_TRACKING", settings->memcopy_tracking);
 

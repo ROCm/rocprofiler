@@ -88,3 +88,6 @@ set ( TEST_LIB_SRC ${TEST_DIR}/tool/tool.cpp ${UTIL_SRC} )
 add_library ( ${TEST_LIB} SHARED ${TEST_LIB_SRC} )
 target_include_directories ( ${TEST_LIB} PRIVATE ${TEST_DIR} ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH} )
 target_link_libraries ( ${TEST_LIB} ${ROCPROFILER_TARGET} ${HSA_RUNTIME_LIB} c stdc++ dl pthread rt )
+
+## Copy OCL test
+execute_process ( COMMAND sh -xc "cp -r ${TEST_DIR}/ocl ${PROJECT_BINARY_DIR}/test" )

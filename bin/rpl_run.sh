@@ -46,12 +46,16 @@ fi
 
 # runtime API trace
 ROCTX_TRACE=0
+KFD_TRACE=0
 HSA_TRACE=0
 SYS_TRACE=0
 HIP_TRACE=0
 
 # Generate stats
 GEN_STATS=0
+
+# Quoting profiled cmd line
+CMD_QTS=1
 
 export PATH=.:$PATH
 
@@ -91,6 +95,13 @@ error() {
   exit 1
 }
 
+error_message=""
+errck() {
+  if [ -n "$error_message" ]; then
+    fatal "$1 : $error_message"
+  fi
+}
+
 # usage method
 usage() {
   bin_name=`basename $0`
@@ -109,7 +120,7 @@ usage() {
   echo "  --cmd-qts <on|off> - quoting profiled cmd line [on]"
   echo ""
   echo "  -i <.txt|.xml file> - input file"
-  echo "      Input file .txt format, automatically rerun application for every pmc line:"
+  echo "      Input file .txt format, automatically rerun application for every profiling features line:"
   echo ""
   echo "        # Perf counters group 1"
   echo "        pmc : Wavefronts VALUInsts SALUInsts SFetchInsts FlatVMemInsts LDSInsts FlatLDSInsts GDSInsts VALUUtilization FetchSize"
@@ -154,6 +165,7 @@ usage() {
   echo ""
   echo "  --stats - generating kernel execution stats, file <output name>.stats.csv"
   echo "  --roctx-trace - to enable rocTX trace"
+  echo "  --kfd-trace - to trace KFD, generates API execution stats and JSON file chrome-tracing compatible"
   echo "  --hsa-trace - to trace HSA, generates API execution stats and JSON file chrome-tracing compatible"
   echo "  --sys-trace - to trace HIP/HSA APIs and GPU activity, generates stats and JSON trace chrome-tracing compatible"
   echo "  --hip-trace - to trace HIP, generates API execution stats and JSON file chrome-tracing compatible"
@@ -166,6 +178,10 @@ usage() {
   echo "        <parameters list=\"hsa_queue_create, hsa_amd_memory_pool_allocate\">"
   echo "        </parameters>"
   echo "      </trace>"
+  echo ""
+  echo "  --trace-period <dealy:length:rate> - to enable trace with initial delay, with periodic sample length and rate"
+  echo "    Supported time formats: <number(m|s|ms|us)>"
+  echo "  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]"
   echo ""
   echo "Configuration file:"
   echo "  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:${HOME}:<package path>"
@@ -212,7 +228,6 @@ run() {
       fi
     fi
     mkdir -p "$ROCP_OUTPUT_DIR"
-
     OUTPUT_LIST="$OUTPUT_LIST $ROCP_OUTPUT_DIR/results.txt"
   fi
 
@@ -220,8 +235,9 @@ run() {
   if [ "$ROCTX_TRACE" = 1 ] ; then
     API_TRACE=${API_TRACE}":roctx"
   fi
-  if [ "$HSA_TRACE" = 1 ] ; then
-    API_TRACE=${API_TRACE}":hsa"
+  if [ "$KFD_TRACE" = 1 ] ; then
+    API_TRACE=${API_TRACE}":kfd"
+    export LD_PRELOAD="libkfdwrapper64.so libhsakmt.so.1"
   fi
   if [ "$HIP_TRACE" = 1 ] ; then
     API_TRACE=${API_TRACE}":hip"
@@ -230,11 +246,12 @@ run() {
     API_TRACE=${API_TRACE}":sys"
   fi
 
-  if [ -n "$API_TRACE" ] ; then
+  if [ "$HSA_TRACE" = 1 ] ; then
+    export ROCTRACER_DOMAIN=$API_TRACE":hsa"
+    export HSA_TOOLS_LIB="$HSA_TOOLS_LIB $TTLIB_PATH/libtracer_tool.so"
+  elif [ -n "$API_TRACE" ] ; then
     export ROCTRACER_DOMAIN=$API_TRACE
-    if [ "$HSA_TRACE" = 0 ] ; then
-      OUTPUT_LIST="$ROCP_OUTPUT_DIR/"
-    fi
+    OUTPUT_LIST="$ROCP_OUTPUT_DIR/"
     export HSA_TOOLS_LIB="$TTLIB_PATH/libtracer_tool.so"
   fi
 
@@ -245,6 +262,8 @@ run() {
 
   CMD_LINE="$APP_CMD $redirection_cmd"
   eval "$CMD_LINE"
+
+  unset LD_PRELOAD
 }
 
 merge_output() {
@@ -353,6 +372,11 @@ while [ 1 ] ; do
   elif [ "$1" = "--roctx-trace" ] ; then
     ARG_VAL=0
     ROCTX_TRACE=1
+  elif [ "$1" = "--kfd-trace" ] ; then
+    ARG_VAL=0
+    export ROCP_TIMESTAMP_ON=1
+    GEN_STATS=1
+    KFD_TRACE=1
   elif [ "$1" = "--hsa-trace" ] ; then
     ARG_VAL=0
     export ROCP_TIMESTAMP_ON=1
@@ -368,6 +392,26 @@ while [ 1 ] ; do
     export ROCP_TIMESTAMP_ON=1
     GEN_STATS=1
     HIP_TRACE=1
+  elif [ "$1" = "--trace-period" ] ; then
+    period_expr="^\([^:]*\):\([^:]*\):\([^:]*\)$"
+    period_ck=`echo "$2" | sed -n "s/"${period_expr}"/ok/p"`
+    if [ -z "$period_ck" ] ; then
+      fatal "Wrong option '$1 $2'"
+    fi
+    period_delay=`echo "$2" | sed -n "s/"${period_expr}"/\1/p"`
+    period_len=`echo "$2" | sed -n "s/"${period_expr}"/\2/p"`
+    period_rate=`echo "$2" | sed -n "s/"${period_expr}"/\3/p"`
+    convert_time_val period_delay
+    errck "Option '$ARG_IN', delay value"
+    convert_time_val period_len
+    errck "Option '$ARG_IN', length value"
+    convert_time_val period_rate
+    errck "Option '$ARG_IN', rate value"
+    export ROCP_CTRL_RATE="$period_delay:$period_len:$period_rate"
+  elif [ "$1" = "--obj-tracking" ] ; then
+    if [ "$2" = "on" ] ; then
+      export ROCP_OBJ_TRACKING=1
+    fi
   elif [ "$1" = "--verbose" ] ; then
     ARG_VAL=0
     export ROCP_VERBOSE_MODE=1
@@ -475,9 +519,7 @@ if [ -n "$csv_output" ] ; then
   else
     python $BIN_DIR/tblextr.py $csv_output $OUTPUT_LIST
   fi
-  if [ "$?" -eq 0 ] ; then
-    echo "RPL: '$csv_output' is generated"
-  else
+  if [ "$?" -ne 0 ] ; then
     echo "Data extracting error: $OUTPUT_LIST'"
   fi
 fi
