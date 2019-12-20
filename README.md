@@ -160,7 +160,7 @@ Options:
     See roctracer documentation on rocTX API details.
 
 Configuration file:
-  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:/home/evgeny:<package path>
+  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:$HOME:<package path>
   First the configuration file is looking in the current directory, then in your home, and then in the package directory.
   Configurable options: 'basenames', 'timestamp', 'ctx-limit', 'heartbeat'.
   An example of 'rpl_rc.xml':
