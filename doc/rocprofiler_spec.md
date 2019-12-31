@@ -113,7 +113,7 @@ The library provides back compatibility if the library major version is less or 
 Returned API status:
 - hsa_status_t - HSA status codes are used from hsa.h header
 
-Loadable plugin on-load/unload methods:
+Loading and Configuring, loadable plugin on-load/unload methods:
 - rocprofiler_settings_t – global properties
 - OnLoadTool 
 - OnLoadToolProp
