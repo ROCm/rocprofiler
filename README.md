@@ -5,6 +5,7 @@ HW specific low-level performance analysis interface for profiling of GPU comput
 profiling includes HW performance counters with complex performance metrics.
 
 ['rocprof' cmdline tool specification](doc/rocprof.md)
+
 [API specification](doc/rocprofiler_spec.md)
 
 ## Metrics
