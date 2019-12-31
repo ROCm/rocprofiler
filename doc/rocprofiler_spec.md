@@ -64,7 +64,6 @@ To check the conformance of used library APi header and the library binary the v
 macros and API methods can be used.
 
 Returning the error and error string methods:
-- rocprofiler_errno - method for returning the error number
 - rocprofiler_error_string - method for returning the error string
 
 Library version:
@@ -114,12 +113,18 @@ The library provides back compatibility if the library major version is less or 
 Returned API status:
 - hsa_status_t - HSA status codes are used from hsa.h header
 
+Loadable plugin on-load/unload methods:
+- rocprofiler_settings_t – global properties
+- OnLoadTool 
+- OnLoadToolProp
+- OnUnloadTool
+
 Info API:
 - rocprofiler_info_kind_t - profiling info kind
 - rocprofiler_info_query_t - profiling info query
 - rocprofiler_info_data_t - profiling info data
 - rocprofiler_get_info - return the info for a given info kind
-- rocprofiler_iterate_info - iterate over the info for a given info kind 
+- rocprofiler_iterote_inf_ - iterate over the info for a given info kind 
 - rocprofiler_query_info - iterate over the info for a given info query
 
 Context API:
@@ -137,6 +142,8 @@ Context API:
 - rocprofiler_get_group - return profiling group for a given index
 - rocprofiler_get_metrics - method for calculating the metrics data
 - rocprofiler_iterate_trace_data - method for iterating output trace data instances
+- rocprofiler_time_id_t - supported time value ID enumeration
+- rocprofiler_get_time – return time for a given time ID and profiling timestamp value
 
 Sampling API:
 - rocprofiler_start - start profiling
@@ -152,10 +159,44 @@ Sampling API:
 Intercepting API:
 - rocprofiler_callback_t - profiling callback type
 - rocprofiler_callback_data_t - profiling callback data type
+- rocprofiler_dispatch_record_t – dispatch record
+- rocprofiler_queue_callbacks_t – queue callbacks, dispatch/destroy
 - rocprofiler_set_queue_callbacks - set queue kernel dispatch and queue destroy callbacks
 - rocprofiler_remove_queue_callbacks - remove queue callbacks
+
+Context pool API:
+- rocprofiler_pool_t – context pool handle
+- rocprofiler_pool_entry_t – context pool entry
+- rocprofiler_pool_properties_t – context pool properties
+- rocprofiler_pool_handler_t – context pool completion handler
+- rocprofiler_pool_open - context pool open
+- rocprofiler_pool_close - context pool close
+- rocprofiler_pool_fetch – fetch and empty context entry to pool
+- rocprofiler_pool_release – release a context entry
+- rocprofiler_pool_iterate – iterated fetched context entries
+- rocprofiler_pool_flush – flush completed context entries
 ```
-### 4.2. Info API
+### 4.2. Loading and Configuring
+```
+Loading and Configuring
+The profiling properties can be set by profiler plugin on loading by ROC runtime.
+The profiler library plugin can be set by ROCP_TOOL_LIB env var.
+
+Global properties:
+
+typedef struct {
+  	uint32_t intercept_mode;
+  	uint64_t timeout;
+  	uint32_t timestamp_on;
+} rocprofiler_settings_t;
+
+On load/unload methods defined in profiling tool library loaded by ROCP_TOOL_LIB env var:
+extern "C" void OnLoadTool();
+extern "C" void OnLoadToolProp(rocprofiler_settings_t* settings);
+extern "C" void OnUnloadTool();
+
+```
+### 4.3. Info API
 ```
 The profiling metrics are defined by name and the traces are defined by name and parameters.
 All supported features can be iterated using 'iterate_info/query_info' methods. The counter
@@ -163,6 +204,7 @@ names are defined in counters table configuration file, each counter has a uniqu
 defined by block name and event id. The traces and trace parameters names are same as in
 the hardware documentation and the parameters codes are rocprofiler_feature_parameter_t values,
 see below in the "Context API" section.
+
 Profiling info kind:
 
 typedef enum {
@@ -220,7 +262,7 @@ has_status_t rocprofiler_query_info(
 	hsa_status_t (*callback)(const rocprofiler_info_data_t info, void *data), // callback
 	void *data);					// data passed to callback
 ```
-### 4.3. Context API
+### 4.4. Context API
 ```
 Profiling context is accumulating all profiling information including profiling features
 which carry profiling data, required buffers for profiling command packets and output data.
@@ -381,8 +423,22 @@ hsa_status_t rocprofiler_iterate_trace_data(
 	hsa_ven_amd_aqlprofile_data_callback_t callback, // [in] callback to iterate
 	                                                // the output data
 	void* callback_data);				// [in/out] passed to callback data
+
+Converting of profiling timestamp to time value for suported time ID.
+Supported time value ID enumeration:
+typedef enum {
+  ROCPROFILER_TIME_ID_CLOCK_REALTIME = 0,   // Linux realtime clock time
+  ROCPROFILER_TIME_ID_CLOCK_MONOTONIC = 1,  // Linux monotonic clock time
+} rocprofiler_time_id_t;
+
+Method for converting of profiling timestamp to time value for a given time ID:
+hsa_status_t rocprofiler_get_time(
+  rocprofiler_time_id_t time_id,            // identifier of the particular
+                                            // time to convert the timestamp
+  uint64_t timestamp,                       // profiling timestamp
+  uint64_t* value_ns);                      // [out] returned time ‘ns’ value
 ```
-### 4.4. Sampling API
+### 4.5. Sampling API
 ```
 The API supports the counters sampling usage model with start/read/stop methods and also lets
 to wait for the profiling data in the intercepting usage model with get_data method.
@@ -423,7 +479,7 @@ hsa_status_t rocprofiler_group_read(
 hsa_status_t rocprofiler_group_get_data(
 	rocprofiler_group_t* group);		// [in/out] profiling group
 ```
-### 4.5.  Intercepting API 
+### 4.6.  Intercepting API 
 ```
 The library provides a callback API for enabling profiling for the kernels dispatched to
 HSA AQL queues. The API enables per-kernel profiling data collection.
@@ -471,34 +527,101 @@ hsa_status_t rocprofiler_set_intercepting(
 
 hsa_status_t rocprofiler_remove_intercepting();
 ```
+### 4.7.  Profiling Context Pools
+```
+The API provide capability to create a context pool for a given agent and a set of features, to fetch/release a context entry, to register a callback for  pool’s contexts completion.
+Profiling pool handle:
+typename rocprofiler_pool_t;
+Profiling pool entry:
+typedef struct {
+  	rocprofiler_t* context;           // context object
+  	void* payload;                    // payload data object
+} rocprofiler_pool_entry_t;
+
+Profiling handler, calling on profiling completion:
+typedef bool (*rocprofiler_pool_handler_t)(const rocprofiler_pool_entry_t* entry, void* arg);
+
+Profiling properties:
+typedef struct {
+   uint32_t num_entries;                    // pool size entries
+   uint32_t payload_bytes;                  // payload size bytes
+   rocprofiler_pool_handler_t handler;      // handler on context completion
+   void* handler_arg;                       // the handler arg
+} rocprofiler_pool_properties_t;
+
+Open profiling pool:
+hsa_status_t rocprofiler_pool_open(
+   hsa_agent_t agent,                       // GPU handle
+   rocprofiler_feature_t* features,         // [in] profiling features array
+   uint32_t feature_count,                  // profiling info count
+   rocprofiler_pool_t** pool,               // [out] context object
+   uint32_t mode,                           // profiling mode mask
+   rocprofiler_pool_properties_t*);         // pool properties
+
+Close profiling pool:
+hsa_status_t rocprofiler_pool_close(
+   rocprofiler_pool_t* pool);               // profiling pool handle
+
+Fetch profiling pool entry:
+hsa_status_t rocprofiler_pool_fetch(
+   rocprofiler_pool_t* pool,          // profiling pool handle
+   rocprofiler_pool_entry_t* entry);  // [out] empty profiling pool entry
+
+Release profiling pool entry:
+hsa_status_t rocprofiler_pool_release(
+   rocprofiler_pool_entry_t* entry);  // released profiling pool entry
+
+Iterate fetched profiling pool entries:
+hsa_status_t rocprofiler_pool_iterate(
+   rocprofiler_pool_t* pool,           // profiling pool handle
+   hsa_status_t (*callback)(rocprofiler_pool_entry_t* entry, void* data), 	            
+                                       // callback
+   void *data); 		               // [in/out] data passed to callback
+
+Flush completed entries in profiling pool:
+hsa_status_t rocprofiler_pool_flush(
+  	rocprofiler_pool_t* pool);       // profiling pool handle
+```
 ## 5. Application code examples
 ### 5.1. Querying available metrics
 ```
 Info data callback:
 
-	hsa_status_t info_data_callback(const rocprofiler_info_data_t info, void *data) {
-		switch (info.kind) {
-			case ROCPROFILER_INFO_KIND_METRIC: {
-				printf("metric %s, description %s\n",
-					info.metric.name,
-					info.metric.description);
-				break;
-			}
-			default:
-				printf("wrong info kind %u\n", kind);
-				return HSA_STATUS_ERROR;
-		}
-		return HSA_STATUS_SUCCESS;
-	}
+    hsa_status_t info_data_callback(const rocprofiler_info_data_t info, void *data) {
+        switch (info.kind) {
+            case ROCPROFILER_INFO_KIND_METRIC: {
+                if (info.metric.expr != NULL) {
+                    fprintf(stdout, "Basic counter:  gpu-agent%d : %s : %s\n",
+                        info.agent_index, info.metric.name, info.metric.description);
+                    fprintf(stdout, "      %s = %s\n", info.metric.name, info.metric.expr);
+                } else {
+                    fprintf(stdout, "Derived counter:  gpu-agent%d : %s",
+                        info.agent_index, info.metric.name);
+                    if (info.metric.instances > 1) {
+                        fprintf(stdout, "[0-%u]", info.metric.instances - 1);
+                    }
+                    fprintf(stdout, " : %s\n", info.metric.description);
+                    fprintf(stdout, "      block %s has %u counters\n",
+                        info.metric.block_name, info.metric.block_counters);
+                }
+                fflush(stdout);
+                break;
+            }
+            default:
+                printf("wrong info kind %u\n", kind);
+                return HSA_STATUS_ERROR;
+        }
+        return HSA_STATUS_SUCCESS;
+    }
 
 Printing all available metrics:
 
-	hsa_status_t status = rocprofiler_iterate_info(
-		agent,
-		ROCPROFILER_INFO_KIND_METRIC,
-		info_data_callback,
-		 NULL);
-	<check status>
+    hsa_status_t status = rocprofiler_iterate_info(
+        agent,
+        ROCPROFILER_INFO_KIND_METRIC,
+        info_data_callback,
+        NULL);
+    <check status>
 ```
 ### 5.2. Profiling code example
 ```
@@ -509,85 +632,200 @@ saved and then direct context method rocprofiler_get_data with default group ind
 can be used.
 
 hsa_status_t_dispatch_callback(
-	const rocprofiler_callback_data_t* callback_data,
-	void* user_data,
-	rocprofiler_group_t* group)
+    const rocprofiler_callback_data_t* callback_data,
+    void* user_data,
+    rocprofiler_group_t* group)
 {
-	hsa_status_t status = HSA_STATUS_SUCCESS;
-	// Profiling context
-	rocprofiler_t* context;
-	// Profiling info objects
-	rocprofiler_feature_t features* = new rocprofiler_feature_t[2];
-	// Tracing parameters
-	rocprofiler_feature_parameter_t* parameters = new rocprofiler_feature_parameter_t[2];
+    hsa_status_t status = HSA_STATUS_SUCCESS;
+    // Profiling context
+    rocprofiler_t* context;
+    // Profiling info objects
+    rocprofiler_feature_t features* = new rocprofiler_feature_t[2];
+    // Tracing parameters
+    rocprofiler_feature_parameter_t* parameters = new rocprofiler_feature_parameter_t[2];
 
-	// Setting profiling features
-	features[0].type = ROCPROFILER_METRIC;
-	features[0].name = "L1_MISS_RATIO";
-	features[1].type = ROCPROFILER_METRIC;
-	features[1].name = "DRAM_BANDWIDTH";
+    // Setting profiling features
+    features[0].type = ROCPROFILER_METRIC;
+    features[0].name = "L1_MISS_RATIO";
+    features[1].type = ROCPROFILER_METRIC;
+    features[1].name = "DRAM_BANDWIDTH";
 
-	// Creating profiling context
-	status = rocprofiler_open(callback_data->dispatch.agent, features, 2, &context,
-		ROCPROFILER_MODE_SINGLEGROUP, NULL);
-	<check status>
-	
-	// Get the profiling group
-	// For general case with many groups there is rocprofiler_group_count() API
-	const uint32_t group_index = 0
-	status = rocprofiler_get_group(context, group_index, group);
-	<check_status>
+    // Creating profiling context
+    status = rocprofiler_open(callback_data->dispatch.agent, features, 2, &context,
+        ROCPROFILER_MODE_SINGLEGROUP, NULL);
+    <check status>
+    
+    // Get the profiling group
+    // For general case with many groups there is rocprofiler_group_count() API
+    const uint32_t group_index = 0
+    status = rocprofiler_get_group(context, group_index, group);
+    <check_status>
 
-	// In SINGLEGROUP mode the context handle itself can be saved, because there is just one group
-	<saving the callback data/profiling group/profiling features>
+    // In SINGLEGROUP mode the context handle itself can be saved, because there is just one group
+    <saving the callback data/profiling group/profiling features>
 
-	return status;
+    return status;
 }
 
+Profiling tool constructor is adding the dispatch callback:
+
 void profiling_libary_constructor() {
-	// Defining callback data, no data in this simple example
-	void* callback_data = NULL;
+    // Defining callback data, no data in this simple example
+    void* callback_data = NULL;
 
-	// Adding observers
-	hsa_sttaus_t status = rocprofiler_add_dispatch_callback(dispatch_callback, callback_data);
-	<check status>
+    // Adding observers
+    hsa_sttaus_t status = rocprofiler_add_dispatch_callback(dispatch_callback, callback_data);
+    <check status>
 
-	// Dispatching profiled kernel
-	<dispatching profiled kernels>
+    // Dispatching profiled kernel
+    <dispatching profiled kernels>
 }
 
 void profiling_libary_destructor() {
-	<for entry : <saved callbacks data>> {
-		// In SINGLEGROUP mode the rocprofiler_get_group() method with default zero group
-		// index can be used, if context handle would be saved
-		status = rocprofiler_group_get_data(entry->group);
-		<check status>
-		status = rocprofiler_get_metrics(entry->group->context);
-		<check status>
-		status = rocprofiler_close(entry->group->context);
-		<check status>
+    <for entry : <saved callbacks data>> {
+        // In SINGLEGROUP mode the rocprofiler_get_group() method with default zero group
+        // index can be used, if context handle would be saved
+        status = rocprofiler_group_get_data(entry->group);
+        <check status>
+        status = rocprofiler_get_metrics(entry->group->context);
+        <check status>
+        status = rocprofiler_close(entry->group->context);
+        <check status>
 
-		<tool_dump_data_method(entry->dispatch_data, entry->features, entry->features_count)>;
-	}
+        <tool_dump_data_method(entry->dispatch_data, entry->features, entry->features_count)>;
+    }
 }
 ```
 ### 5.3. Option to use completion callback
 ```
 Creating profiling context with completion callback:
-	. . .
-	rocprofiler_properties_t properties = {};
-	properties.callback = completion_callback;
-	properties.callback_arg = NULL; 	// no args defined
-	status = rocprofiler_open(agent, features, 3, &context,
-		ROCPROFILER_MODE_SINGLEGROUP, properties);
-	<check status>
-	. . .
+    . . .
+    rocprofiler_properties_t properties = {};
+    properties.callback = completion_callback;
+    properties.callback_arg = NULL;     // no args defined
+    status = rocprofiler_open(agent, features, 3, &context,
+        ROCPROFILER_MODE_SINGLEGROUP, properties);
+    <check status>
+    . . .
 
 Definition of completion callback:
 
 void completion_callback(profiler_group_t group, void* arg) {
-	<tool_dump_data_method(group)>
-	hsa_status_t status = rocprofiler_close(group.context);
-	<check status>
+    <tool_dump_data_method(group)>
+    hsa_status_t status = rocprofiler_close(group.context);
+    <check status>
+}
+```
+### 5.4. Option to Use Context Pool
+```
+Code example of context pool usage.
+Creating profiling contexts pool:
+   . . .
+   rocprofiler_pool_properties_t properties{};
+   properties.num_entries = 100;
+   properties.payload_bytes = sizeof(context_entry_t);
+   properties.handler = context_handler; 
+   properties.handler_arg = handler_arg;
+   status = rocprofiler_pool_open(agent, features, 3, &context,
+		ROCPROFILER_MODE_SINGLEGROUP, properties);
+   <check status>
+    . . .
+
+Fetching a context entry:
+   rocprofiler_pool_entry_t pool_entry{};
+   status = rocprofiler_pool_fetch(pool, &pool_entry);
+   <check status>
+   // Profiling context entry
+   rocprofiler_t* context = pool_entry.context;
+   context_entry_t* entry = reinterpret_cast <context_entry_t*>               
+                            (pool_entry.payload);
+```
+### 5.5. Standalone Sampling Usage Code Example
+```
+The profiling metrics are being read from separate standalone queue other than the application kernels are submitted to. To enable the sampling mode, the profiling mode in all user queues should be enabled.  It can be done by loading ROC-profiler library to HSA runtime using the environment variable HSA_TOOLS_LIB for all shell sessions.
+   // Sampling rate
+   uint32_t sampling_rate = <some rate>;
+   // Sampling count
+   uint32_t sampling_count = <some count>;
+   // HSA status
+   hsa_status_t status = HSA_STATUS_ERROR;
+   // HSA agent
+   hsa_agent_t agent;
+   // Profiling context
+   rocprofiler_t* context = NULL;
+   // Profiling properties
+   rocprofiler_properties_t properties;
+
+   // Getting HSA agent
+   <query for HSA agent by ‘hsa_iterate_agents()’>
+ 
+   // Profiling feature objects
+   const unsigned feature_count = 2;
+   rocprofiler_feature_t feature[feature_count];
+  	
+   // Counters and metrics
+   feature[0].kind = ROCPROFILER_FEATURE_KIND_METRIC;
+   feature[0].name = "GPUBusy";
+   feature[1].kind = ROCPROFILER_FEATURE_KIND_METRIC;
+   feature[1].name = "SQ_WAVES";
+
+   // Creating profiling context with standalone queue
+   properties = {};
+   properties.queue_depth = 128;
+   status = rocprofiler_open(agent, feature, feature_count, &context,
+            ROCPROFILER_MODE_STANDALONE| ROCPROFILER_MODE_CREATEQUEUE|
+            ROCPROFILER_MODE_SINGLEGROUP, &properties);
+   <check status>
+
+   // Start counters and sample them in the loop with the sampling rate
+   status = rocprofiler_start(context, 0);
+   <check status>
+
+   for (unsigned ind = 0; ind < sampling_count; ++ind) {
+      sleep(sampling_rate);
+      status = rocprofiler_read(context, 0);
+      <check status>
+      status = rocprofiler_get_data(context, 0);
+      <check status>
+      status = rocprofiler_get_metrics(context);
+      <check status>
+      print_results(feature, feature_count);
+   }
+
+   // Stop counters
+   status = rocprofiler_stop(context, group_n);
+   <check status>
+
+   // Finishing cleanup
+   // Deleting profiling context will delete all allocated resources
+   status = rocprofiler_close(context); 
+   <check status>
+```
+### 5.6. Printing Out Profiling Results
+```
+Below  is a code example for printing out the profiling results from profiling features array:
+void print_results(rocprofiler_feature_t* feature, uint32_t feature_count) {
+   for (rocprofiler_feature_t* p = feature; p < feature + feature_count; ++p) 
+   {
+      std::cout << (p - feature) << ": " << p->name;
+      switch (p->data.kind) {
+         case ROCPROFILER_DATA_KIND_INT64:
+            std::cout << " result_int64 (" << p->data.result_int64 << ")" 
+                      << std::endl;
+            break;
+
+         case ROCPROFILER_DATA_KIND_BYTES: {
+            std::cout << " result_bytes ptr(" << p->data.result_bytes.ptr << 
+                 ") " << " size(" << p->data.result_bytes.size << ")"
+                 << " instance_count(" << p->data.result_bytes.instance_count 
+                 << ")";
+            break;
+         }
+         default:
+            std::cout << "bad result kind (" << p->data.kind << ")" 
+                      << std::endl;
+            <abort>
+      }
+   }
 }
 ```
