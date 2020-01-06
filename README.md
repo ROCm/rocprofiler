@@ -4,6 +4,7 @@ ROC profiler library. Profiling with perf-counters and derived metrics. Library 
 HW specific low-level performance analysis interface for profiling of GPU compute applications. The
 profiling includes HW performance counters with complex performance metrics.
 
+## Documentation
 ['rocprof' cmdline tool specification](doc/rocprof.md)
 
 ['rocprofiler' profiling C API specification](doc/rocprofiler_spec.md)
