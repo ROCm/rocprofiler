@@ -6,7 +6,7 @@ profiling includes HW performance counters with complex performance metrics.
 
 ['rocprof' cmdline tool specification](doc/rocprof.md)
 
-[API specification](doc/rocprofiler_spec.md)
+['rocprofiler' profiling C API specification](doc/rocprofiler_spec.md)
 
 ## Metrics
 [The link to profiler default metrics XML specification](test/tool/metrics.xml)
