@@ -76,7 +76,7 @@ profiling includes HW performance counters with complex performance metrics.
 
 ## Profiling utility usage:
 ```
-  rocprof [-h] [--list-basic] [--list-derived] [-i <input .txt/.xml file>] [-o <output CSV file>] <app command line>
+rocprof [-h] [--list-basic] [--list-derived] [-i <input .txt/.xml file>] [-o <output CSV file>] <app command line>
 
 Options:
   -h - this help
