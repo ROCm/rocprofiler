@@ -150,6 +150,11 @@ HsaRsrcFactory::HsaRsrcFactory(bool initialize_hsa) : initialize_hsa_(initialize
   CHECK_STATUS("HSA timer allocation failed",
     (timer_ == NULL) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS);
 
+  // Time correlation
+  const uint32_t corr_iters = 1000;
+  CorrelateTime(HsaTimer::TIME_ID_CLOCK_REALTIME, corr_iters);
+  CorrelateTime(HsaTimer::TIME_ID_CLOCK_MONOTONIC, corr_iters);
+
   // System timeout
   timeout_ = (timeout_ns_ == HsaTimer::TIMESTAMP_MAX) ? timeout_ns_ : timer_->ns_to_sysclock(timeout_ns_);
 }

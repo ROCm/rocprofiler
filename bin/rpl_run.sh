@@ -179,6 +179,7 @@ usage() {
   echo "        </parameters>"
   echo "      </trace>"
   echo ""
+  echo "  --trace-start <on|off> - to enable tracing on start [on]"
   echo "  --trace-period <dealy:length:rate> - to enable trace with initial delay, with periodic sample length and rate"
   echo "    Supported time formats: <number(m|s|ms|us)>"
   echo "  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]"
@@ -232,12 +233,13 @@ run() {
   fi
 
   API_TRACE=""
+  LD_PRELOAD=""
   if [ "$ROCTX_TRACE" = 1 ] ; then
     API_TRACE=${API_TRACE}":roctx"
   fi
   if [ "$KFD_TRACE" = 1 ] ; then
     API_TRACE=${API_TRACE}":kfd"
-    export LD_PRELOAD="libkfdwrapper64.so libhsakmt.so.1"
+    export LD_PRELOAD="libkfdwrapper64.so libhsakmt.so.1 $LD_PRELOAD"
   fi
   if [ "$HIP_TRACE" = 1 ] ; then
     API_TRACE=${API_TRACE}":hip"
@@ -392,6 +394,10 @@ while [ 1 ] ; do
     export ROCP_TIMESTAMP_ON=1
     GEN_STATS=1
     HIP_TRACE=1
+  elif [ "$1" = "--trace-start" ] ; then
+    if [ "$2" = "off" ] ; then
+      export ROCP_CTRL_RATE="-1"
+    fi
   elif [ "$1" = "--trace-period" ] ; then
     period_expr="^\([^:]*\):\([^:]*\):\([^:]*\)$"
     period_ck=`echo "$2" | sed -n "s/"${period_expr}"/ok/p"`

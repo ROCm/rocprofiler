@@ -199,6 +199,18 @@ hsa_status_t rocprofiler_close(rocprofiler_t* context);  // [in] profiling conte
 hsa_status_t rocprofiler_reset(rocprofiler_t* context,  // [in] profiling context
                                uint32_t group_index);   // group index
 
+// Supported time value ID
+typedef enum {
+  ROCPROFILER_TIME_ID_CLOCK_REALTIME = 0, // Linux realtime clock time
+  ROCPROFILER_TIME_ID_CLOCK_MONOTONIC = 1, // Linux monotonic clock time
+} rocprofiler_time_id_t;
+
+// Return time value for a given time ID and profiling timestamp
+hsa_status_t rocprofiler_get_time(
+  rocprofiler_time_id_t time_id, // identifier of the particular time to convert the timesatmp
+  uint64_t timestamp, // profiling timestamp
+  uint64_t* value_ns); // [out] returned time 'ns' value
+
 ////////////////////////////////////////////////////////////////////////////////
 // Queue callbacks
 //
@@ -376,7 +388,7 @@ hsa_status_t rocprofiler_query_info(
   hsa_status_t (*callback)(const rocprofiler_info_data_t info, void *data), // callback
   void *data); // [in/out] data passed to callback
 
-// Creates a profiled queue. All dispatches on this queue will be profiled
+// Create a profiled queue. All dispatches on this queue will be profiled
 hsa_status_t rocprofiler_queue_create_profiled(
   hsa_agent_t agent_handle,uint32_t size, hsa_queue_type32_t type,
   void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data),
