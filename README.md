@@ -40,6 +40,11 @@ profiling includes HW performance counters with complex performance metrics.
 
 ## To build with the current installed ROCM:
 ```
+  - Python2.7 is required.
+  The required modules: CppHeaderParser, argparse.
+  To install:
+  sudo pip install CppHeaderParser argparse
+ 
  - To build and install to /opt/rocm/rocprofiler
   export CMAKE_PREFIX_PATH=/opt/rocm/include/hsa:/opt/rocm
 
