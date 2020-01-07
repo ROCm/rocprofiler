@@ -4,6 +4,10 @@ ROC profiler library. Profiling with perf-counters and derived metrics. Library 
 HW specific low-level performance analysis interface for profiling of GPU compute applications. The
 profiling includes HW performance counters with complex performance metrics.
 
+To use the rocProfiler API you need the API header and to link your application with roctracer .so librray:
+ - the API header: /opt/rocm/rocprofiler/include/rocprofiler.h
+ - the .so library: /opt/rocm/lib/librocprofiler64.so
+
 ## Documentation
 - ['rocprof' cmdline tool specification](doc/rocprof.md)
 - ['rocprofiler' profiling C API specification](doc/rocprofiler_spec.md)
