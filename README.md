@@ -151,10 +151,12 @@ Options:
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
 
   --stats - generating kernel executino stats, file <output name>.stats.csv
+  --sys-trace - to trace HIP/HSA APIs and GPU activity, generates stats and JSON trace chrome-tracing compatible
   --hip-trace - to trace HIP, generates API execution stats/trace and JSON file viewable in chrome tracing
     'HCC_HOME' env var is required to be set to where 'hcc' is installed.
   --hsa-trace - to trace HSA, generates API execution stats/trace and JSON file viewable in chrome tracing
-    Generated files: <output name>.hsa_stats.txt <output name>.json
+  --kfd-trace - to trace KFD, generates API execution stats and JSON file chrome-tracing compatible"
+    Generated files: <output name>.<domain>_stats.txt <output name>.json
     Traced API list can be set by input .txt or .xml files.
     Input .txt:
       hsa: hsa_queue_create hsa_amd_memory_pool_allocate
@@ -173,12 +175,13 @@ Options:
 Configuration file:
   You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:$HOME:<package path>
   First the configuration file is looking in the current directory, then in your home, and then in the package directory.
-  Configurable options: 'basenames', 'timestamp', 'ctx-limit', 'heartbeat'.
+  Configurable options: 'basenames', 'timestamp', 'ctx-limit', 'heartbeat', 'obj-tracking'.
   An example of 'rpl_rc.xml':
     <defaults
       basenames=off
       timestamp=off
       ctx-limit=0
       heartbeat=0
+      obj-tracking=0
     ></defaults>
 ```
