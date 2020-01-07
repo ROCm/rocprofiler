@@ -40,6 +40,8 @@ profiling includes HW performance counters with complex performance metrics.
 
 ## To build with the current installed ROCM:
 ```
+  - ROCm is required.
+  
   - Python2.7 is required.
   The required modules: CppHeaderParser, argparse.
   To install:
