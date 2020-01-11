@@ -87,6 +87,7 @@ Options:
   --verbose - verbose mode, dumping all base counters used in the input metrics
   --list-basic - to print the list of basic HW counters
   --list-derived - to print the list of derived metrics with formulas
+  --cmd-qts <on|off> - quoting profiled cmd-line [on]
 
   -i <.txt|.xml file> - input file
       Input file .txt format, automatically rerun application for every pmc line:
@@ -153,28 +154,28 @@ Options:
 
   --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
+  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]
 
-  --stats - generating kernel executino stats, file <output name>.stats.csv
+  --stats - generating kernel execution stats, file <output name>.stats.csv
+
+  --roctx-trace - to enable rocTX application code annotation trace, "Markers and Ranges" JSON trace section.
   --sys-trace - to trace HIP/HSA APIs and GPU activity, generates stats and JSON trace chrome-tracing compatible
-  --hip-trace - to trace HIP, generates API execution stats/trace and JSON file viewable in chrome tracing
-    'HCC_HOME' env var is required to be set to where 'hcc' is installed.
-  --hsa-trace - to trace HSA, generates API execution stats/trace and JSON file viewable in chrome tracing
-  --kfd-trace - to trace KFD, generates API execution stats and JSON file chrome-tracing compatible"
+  --hip-trace - to trace HIP, generates API execution stats and JSON file chrome-tracing compatible
+  --hsa-trace - to trace HSA, generates API execution stats and JSON file chrome-tracing compatible
+  --kfd-trace - to trace KFD, generates API execution stats and JSON file chrome-tracing compatible
     Generated files: <output name>.<domain>_stats.txt <output name>.json
     Traced API list can be set by input .txt or .xml files.
     Input .txt:
       hsa: hsa_queue_create hsa_amd_memory_pool_allocate
     Input .xml:
       <trace name="HSA">
-        <parameters api="hsa_queue_create, hsa_amd_memory_pool_allocate">
+        <parameters list="hsa_queue_create, hsa_amd_memory_pool_allocate">
         </parameters>
       </trace>
- 
-  --roctx-trace - to enable rocTX applicatin code annotation trace; should be use in addition to the trace options above.
-    Will show the application code annotation with rocTX events: roctxMark, roctxRangePush, roctxRangePop in JSON trace
-    "Markers and Ranges" section.
-    Application code needs to be explicitely instrumented using rocTX events APIs.
-    See roctracer documentation on rocTX API details.
+
+  --trace-start <on|off> - to enable tracing on start [on]
+  --trace-period <dealy:length:rate> - to enable trace with initial delay, with periodic sample length and rate
+    Supported time formats: <number(m|s|ms|us)>
 
 Configuration file:
   You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:$HOME:<package path>
