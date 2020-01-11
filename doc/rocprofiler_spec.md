@@ -74,7 +74,6 @@ Library version:
 ```
 ### 3.2. Returning the error and error string methods
 ```
-rocprofiler_errno_t rocprofiler_errno();
 const char* rocprofiler_error_string();
 ```
 ### 3.3. Library version
