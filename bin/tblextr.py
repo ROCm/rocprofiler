@@ -239,13 +239,17 @@ def fill_ext_db(table_name, db, indir, trace_name, api_pid):
           continue
 
         if cid == 2:
+          if not pid in range_stack: range_stack[pid] = {}
           pid_stack = range_stack[pid]
+          if not tid in pid_stack: pid_stack[tid] = []
           rec_stack = pid_stack[tid]
-          rec_vals = rec_stack.pop()
-          rec_vals[1] = tms
+          if len(rec_stack) != 0: 
+            rec_vals = rec_stack.pop()
+            rec_vals[1] = tms
 
-        db.insert_entry(table_handle, rec_vals)
-        record_id += 1
+        if len(rec_vals) != 0: 
+          db.insert_entry(table_handle, rec_vals)
+          record_id += 1
 
   return 1
 #############################################################
