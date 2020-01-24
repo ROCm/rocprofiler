@@ -154,9 +154,10 @@ Options:
 
   --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
+  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]
 
   --stats - generating kernel execution stats, file <output name>.stats.csv
-
+  
   --roctx-trace - to enable rocTX application code annotation trace, "Markers and Ranges" JSON trace section.
   --sys-trace - to trace HIP/HSA APIs and GPU activity, generates stats and JSON trace chrome-tracing compatible
   --hip-trace - to trace HIP, generates API execution stats and JSON file chrome-tracing compatible
@@ -175,7 +176,6 @@ Options:
   --trace-start <on|off> - to enable tracing on start [on]
   --trace-period <dealy:length:rate> - to enable trace with initial delay, with periodic sample length and rate
     Supported time formats: <number(m|s|ms|us)>
-  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]
 
 Configuration file:
   You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:$HOME:<package path>
