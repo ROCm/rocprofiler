@@ -239,11 +239,13 @@ def fill_ext_db(table_name, db, indir, trace_name, api_pid):
           continue
 
         if cid == 2:
+          if not pid in range_stack: fatal("ROCTX range begin not found, pid(" + pid + ")");
           pid_stack = range_stack[pid]
+          if not tid in pid_stack: fatal("ROCTX range begin not found, tid(" + tid + ")");
           rec_stack = pid_stack[tid]
           rec_vals = rec_stack.pop()
           rec_vals[1] = tms
-
+ 
         db.insert_entry(table_handle, rec_vals)
         record_id += 1
 
