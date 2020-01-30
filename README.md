@@ -47,7 +47,7 @@ To use the rocProfiler API you need the API header and to link your application 
  - ROCm is required.
   
  - Python is required.
-  The required modules: sqlite3, CppHeaderParser, argparse.
+  The required modules: CppHeaderParser, argparse.
   To install:
   sudo pip install CppHeaderParser argparse
  
