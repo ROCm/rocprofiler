@@ -2,9 +2,7 @@ import csv, sqlite3, re, sys
 import commands
 from functools import reduce
 
-
 class JSON:
-
 
   def __init__(self, file_name):
     self.file_name = file_name
