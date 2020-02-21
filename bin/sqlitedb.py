@@ -1,4 +1,5 @@
 import csv, sqlite3, re, sys
+import commands
 from functools import reduce
 
 
@@ -22,7 +23,17 @@ class JSON:
   def close_json(self, file_name):
     if not re.search(r'\.json$', file_name):
       raise Exception('wrong output file type: "' + file_name + '"' )
+    status1, output1 = commands.getstatusoutput("/opt/rocm/bin/rocminfo > rocminfo.txt; parse_text_to_json.py -in rocminfo.txt -out rocminfo.json; cat rocminfo.json ")
+    status2, output2 = commands.getstatusoutput("/opt/rocm/bin/hipcc --version > hipccversion.txt; parse_text_to_json.py -in hipccversion.txt -out hipccversion.json; cat hipccversion.json ")
+    if status1 != 0 :
+      raise Exception('Could not run command: rocminfo')
+    if status2 != 0 :
+      raise Exception('Could not run command: hipcc --version')
+    output1 = ',' + output1
+    output2 = ',' + output2
     with open(file_name, mode='a') as fd:
+      fd.write(output1);
+      fd.write(output2);
       fd.write(']}\n');
 
   def label_json(self, pid, label, file_name):
