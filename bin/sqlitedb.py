@@ -1,6 +1,7 @@
 import csv, sqlite3, re, sys
 import commands
 from functools import reduce
+from txt2params import gen_params 
 
 class JSON:
 
@@ -21,18 +22,35 @@ class JSON:
   def close_json(self, file_name):
     if not re.search(r'\.json$', file_name):
       raise Exception('wrong output file type: "' + file_name + '"' )
-    status1, output1 = commands.getstatusoutput("/opt/rocm/bin/rocminfo > rocminfo.txt; parse_text_to_json.py -in rocminfo.txt -out rocminfo.json; cat rocminfo.json ")
-    status2, output2 = commands.getstatusoutput("/opt/rocm/bin/hipcc --version > hipccversion.txt; parse_text_to_json.py -in hipccversion.txt -out hipccversion.json; cat hipccversion.json ")
+
+    status1, output1 = commands.getstatusoutput("/opt/rocm/bin/rocminfo > rocminfo.txt")
     if status1 != 0 :
       raise Exception('Could not run command: rocminfo')
+    params = gen_params('rocminfo.txt')
+
+    status2, output2 = commands.getstatusoutput("/opt/rocm/bin/hipcc --version > hipccversion.txt")
     if status2 != 0 :
       raise Exception('Could not run command: hipcc --version')
-    output1 = ',' + output1
-    output2 = ',' + output2
+    params2 = gen_params('hipccversion.txt')
+
     with open(file_name, mode='a') as fd:
-      fd.write(output1);
-      fd.write(output2);
-      fd.write(']}\n');
+      fd.write(',{\n')
+      cnt = 0
+      for key in params:
+        cnt = cnt + 1
+        if cnt == len(params):
+          fd.write('"' + key + '": "' + params[key] + '"\n')
+        else:
+          fd.write('"' + key + '": "' + params[key] + '",\n')
+      fd.write('},{\n')
+      cnt = 0 
+      for key in params2:
+        cnt = cnt + 1
+        if cnt == len(params2):
+          fd.write('"' + key + '": "' + params2[key] + '"\n')
+        else:
+          fd.write('"' + key + '": "' + params2[key] + '",\n')
+      fd.write('}]}\n');
 
   def label_json(self, pid, label, file_name):
     if not re.search(r'\.json$', file_name):
