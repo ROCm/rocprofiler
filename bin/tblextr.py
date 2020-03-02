@@ -23,7 +23,10 @@
 ################################################################################
 
 import os, sys, re
+from globals import *
 from sqlitedb import SQLiteDB
+from json_utils import JSON 
+from csv_utils import CSV 
 import dform
 
 # Parsing results in the format:
@@ -31,33 +34,6 @@ import dform
 #  GRBM_GUI_ACTIVE (74332)
 #  SQ_WAVES (4096)
 #  SQ_INSTS_VMEM_RD (36864)
-
-EXT_PID = 0
-COPY_PID = 1
-HIP_PID = 2
-HSA_PID = 3
-KFD_PID = 4
-OPS_PID = 5
-GPU_BASE_PID = 6
-NONE_PID = -1
-
-max_gpu_id = -1
-START_US = 0
-
-hsa_activity_found = 0
-
-# dependencies dictionary
-#dep_dict = {}
-#kern_dep_list = []
-
-# global vars
-table_descr = [
-  ['Index', 'KernelName'],
-  {'Index': 'INTEGER', 'KernelName': 'TEXT'}
-]
-var_list = table_descr[0]
-var_table = {}
-
 
 class dependencies:
 
@@ -68,31 +44,6 @@ class dependencies:
 dep_obj = dependencies()
 dep_dict = dep_obj.dep_dict
 kern_dep_list = dep_obj.kern_dep_list
-
-class CSV:
-
-  def __init__(self, file_name):
-    self.file_name = file_name
-    self.fd = open(self.file_name, mode='w')
-
-  def __del__(self):
-    self.fd.close()
-
-  # dump CSV results
-  def dump_csv(self):
-    global var_list
-    keys = sorted(var_table.keys(), key=int)
-
-    with open(self.file_name, mode='w') as self.fd:
-      self.fd.write(','.join(var_list) + '\n');
-      for ind in keys:
-        entry = var_table[ind]
-        dispatch_number = entry['Index']
-        if ind != dispatch_number: fatal("Dispatch #" + ind + " index mismatch (" + dispatch_number + ")\n")
-        val_list = [entry[var] for var in var_list]
-        self.fd.write(','.join(val_list) + '\n');
-
-    print("File '" + self.file_name + "' is generating")
 
 #############################################################
 class domains:
@@ -339,14 +290,14 @@ def fill_kernel_db(table_name, db):
     table_descr[1][var] = 'INTEGER'
   table_descr[0] = var_list;
 
-  table_handle = self.db.add_table(table_name, table_descr)
+  table_handle = db.add_table(table_name, table_descr)
 
   for ind in keys:
     entry = var_table[ind]
     dispatch_number = entry['Index']
     if ind != dispatch_number: fatal("Dispatch #" + ind + " index mismatch (" + dispatch_number + ")\n")
     val_list = [entry[var] for var in var_list]
-    self.db.insert_entry(table_handle, val_list)
+    db.insert_entry(table_handle, val_list)
 
 def fill_copy_db(table_name, db, indir):
   file_name = indir + '/' + 'async_copy_trace.txt'
@@ -526,35 +477,35 @@ else:
       json_obj.label_json(int(ind) + int(GPU_BASE_PID), "GPU" + str(ind), jsonfile)
 
   if ext_trace_found:
-    dform.gen_ext_json_trace(db, 'rocTX', START_US, jsonfile)
+    dform.gen_ext_json_trace(db, 'rocTX', START_US, json_obj)
 
   if len(var_table) != 0:
     dform.post_process_data(db, 'A', csvfile)
     dform.gen_table_bins(db, 'A', statfile, 'KernelName', 'DurationNs')
     if hsa_trace_found and 'BeginNs' in var_list:
-      dform.gen_kernel_json_trace(db, 'A', GPU_BASE_PID, START_US, jsonfile)
+      dform.gen_kernel_json_trace(db, 'A', GPU_BASE_PID, START_US, json_obj)
 
   if hsa_trace_found:
     dform.post_process_data(db, 'HSA')
     dform.gen_table_bins(db, 'HSA', hsa_statfile, 'Name', 'DurationNs')
-    dform.gen_api_json_trace(db, 'HSA', START_US, jsonfile)
+    dform.gen_api_json_trace(db, 'HSA', START_US, json_obj)
 
   if hsa_activity_found:
     dform.post_process_data(db, 'COPY')
-    dform.gen_api_json_trace(db, 'COPY', START_US, jsonfile)
+    dform.gen_api_json_trace(db, 'COPY', START_US, json_obj)
 
   if hip_trace_found:
     dform.post_process_data(db, 'HIP')
     dform.gen_table_bins(db, 'HIP', hip_statfile, 'Name', 'DurationNs')
-    dform.gen_api_json_trace(db, 'HIP', START_US, jsonfile)
+    dform.gen_api_json_trace(db, 'HIP', START_US, json_obj)
 
     dform.post_process_data(db, 'OPS')
-    dform.gen_ops_json_trace(db, 'OPS', GPU_BASE_PID, START_US, jsonfile)
+    dform.gen_ops_json_trace(db, 'OPS', GPU_BASE_PID, START_US, json_obj)
 
   if kfd_trace_found:
     dform.post_process_data(db, 'KFD')
     dform.gen_table_bins(db, 'KFD', kfd_statfile, 'Name', 'DurationNs')
-    dform.gen_api_json_trace(db, 'KFD', START_US, jsonfile)
+    dform.gen_api_json_trace(db, 'KFD', START_US, json_obj)
 
   if any_trace_found:
     for (to_pid, dep_str) in dep_dict.items():
@@ -581,7 +532,7 @@ else:
       dep_id += len(tid_list)
 
   if any_trace_found:
-    json_obj.close_json(jsonfile);
+    json_obj.close_json();
   db.close()
 
 sys.exit(0)
