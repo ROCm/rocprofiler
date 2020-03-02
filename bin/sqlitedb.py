@@ -1,126 +1,12 @@
 import csv, sqlite3, re, sys
 import commands
 from functools import reduce
-from txt2params import gen_params 
-
-class JSON:
-
-  def __init__(self, file_name):
-    self.file_name = file_name
-    self.fd = open(self.file_name, mode='w')
-
-  def __del__(self):
-    self.fd.close()
-
-  # dump JSON trace
-  def open_json(self, file_name):
-    if not re.search(r'\.json$', file_name):
-      raise Exception('wrong output file type: "' + file_name + '"' )
-    with open(file_name, mode='w') as fd:
-      fd.write('{ "traceEvents":[{}\n');
-
-  def close_json(self, file_name):
-    if not re.search(r'\.json$', file_name):
-      raise Exception('wrong output file type: "' + file_name + '"' )
-
-    status1, output1 = commands.getstatusoutput("/opt/rocm/bin/rocminfo > rocminfo.txt")
-    if status1 != 0 :
-      raise Exception('Could not run command: rocminfo')
-    params = gen_params('rocminfo.txt')
-
-    status2, output2 = commands.getstatusoutput("/opt/rocm/bin/hipcc --version > hipccversion.txt")
-    if status2 != 0 :
-      raise Exception('Could not run command: hipcc --version')
-    params2 = gen_params('hipccversion.txt')
-
-    with open(file_name, mode='a') as fd:
-      fd.write(',{\n')
-      cnt = 0
-      for key in params:
-        cnt = cnt + 1
-        if cnt == len(params):
-          fd.write('"' + key + '": "' + params[key] + '"\n')
-        else:
-          fd.write('"' + key + '": "' + params[key] + '",\n')
-      fd.write('},{\n')
-      cnt = 0 
-      for key in params2:
-        cnt = cnt + 1
-        if cnt == len(params2):
-          fd.write('"' + key + '": "' + params2[key] + '"\n')
-        else:
-          fd.write('"' + key + '": "' + params2[key] + '",\n')
-      fd.write('}]}\n');
-
-  def label_json(self, pid, label, file_name):
-    if not re.search(r'\.json$', file_name):
-      raise Exception('wrong output file type: "' + file_name + '"' )
-    with open(file_name, mode='a') as fd:
-      fd.write(',{"args":{"name":"%s %s"},"ph":"M","pid":%s,"name":"process_name"}\n' %(self.section_index, label, pid));
-    self.section_index += 1
-
-  def flow_json(self, base_id, from_pid, from_tid, from_us_list, to_pid, to_us_dict, corr_id_list, start_us, file_name):
-    if not re.search(r'\.json$', file_name):
-      raise Exception('wrong output file type: "' + file_name + '"' )
-    with open(file_name, mode='a') as fd:
-      dep_id = base_id
-      for ind in range(len(from_tid)):
-        if (len(corr_id_list) != 0): corr_id = corr_id_list[ind]
-        else: corr_id = ind
-        if corr_id in to_us_dict:
-          from_ts = from_us_list[ind] - start_us
-          to_ts = to_us_dict[corr_id] - start_us
-          if from_ts > to_ts: from_ts = to_ts
-          fd.write(',{"ts":%d,"ph":"s","cat":"DataFlow","id":%d,"pid":%s,"tid":%s,"name":"dep"}\n' % (from_ts, dep_id, str(from_pid), from_tid[ind]))
-          fd.write(',{"ts":%d,"ph":"t","cat":"DataFlow","id":%d,"pid":%s,"tid":0,"name":"dep"}\n' % (to_ts, dep_id, str(to_pid)))
-          dep_id += 1
-
-  def dump_json(self, table_name, data_name, file_name):
-    if not re.search(r'\.json$', file_name):
-      raise Exception('wrong output file type: "' + file_name + '"' )
-
-    sub_ptrn = re.compile(r'(^"|"$)')
-    name_ptrn = re.compile(r'(name|Name)')
-
-    table_fields = self._get_fields(table_name)
-    table_raws = self._get_raws(table_name)
-    data_fields = self._get_fields(data_name)
-    data_raws = self._get_raws(data_name)
-
-    with open(file_name, mode='a') as fd:
-      table_raws_len = len(table_raws)
-      for raw_index in range(table_raws_len):
-        if (raw_index == table_raws_len - 1) or (raw_index % 1000 == 0):
-          sys.stdout.write( \
-            "\rdump json " + str(raw_index) + ":" + str(len(table_raws))  + " "*100 \
-          )
-
-        vals_list = []
-        values = list(table_raws[raw_index])
-        for value_index in range(len(values)):
-          label = table_fields[value_index]
-          value = values[value_index]
-          if name_ptrn.search(label): value = sub_ptrn.sub(r'', value)
-          if label != '"Index"': vals_list.append('%s:"%s"' % (label, value))
-
-        args_list = []
-        data = list(data_raws[raw_index])
-        for value_index in range(len(data)):
-          label = data_fields[value_index]
-          value = data[value_index]
-          if name_ptrn.search(label): value = sub_ptrn.sub(r'', value)
-          if label != '"Index"': args_list.append('%s:"%s"' % (label, value))
-
-        fd.write(',{"ph":"%s",%s,\n  "args":{\n    %s\n  }\n}\n' % ('X', ','.join(vals_list), ',\n    '.join(args_list)))
-
-    sys.stdout.write('\n')
 
 # SQLite Database class
 class SQLiteDB:
   def __init__(self, file_name):
     self.connection = sqlite3.connect(file_name)
     self.tables = {}
-    self.section_index = 0
 
   def __del__(self):
     self.connection.close()
