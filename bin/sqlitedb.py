@@ -1,5 +1,6 @@
 import csv, sqlite3, re, sys
 from functools import reduce
+from txt2params import gen_params
 
 # SQLite Database class
 class SQLiteDB:
@@ -97,12 +98,44 @@ class SQLiteDB:
       for raw in self._get_raws(table_name):
         fd.write(reduce(lambda a, b: str(a) + ',' + str(b), raw) + '\n')
 
+ 
   # dump JSON trace
   def open_json(self, file_name):
     if not re.search(r'\.json$', file_name):
       raise Exception('wrong output file type: "' + file_name + '"' )
+    status1, output1 = commands.getstatusoutput("/opt/rocm/bin/rocminfo > rocminfo.txt")
+    if status1 != 0 :
+      raise Exception('Could not run command: rocminfo')
+    params = gen_params('rocminfo.txt');
+
+    status2, output2 = commands.getstatusoutput("/opt/rocm/bin/hipcc --version > hipccversion.txt")
+    if status2 != 0 :
+      raise Exception('Could not run command: hipcc --version')
+    params2 = gen_params('hipccversion.txt');
+
     with open(file_name, mode='w') as fd:
-      fd.write('{ "traceEvents":[{}\n');
+      cnt = 0
+      fd.write('{\n')
+      fd.write('"comments": {\n')
+      fd.write('  "rocminfo": {\n')
+      for key in params:
+        cnt = cnt + 1
+        if cnt == len(params):
+          fd.write('    "' + key + '": "' + params[key] + '"\n')
+        else:
+          fd.write('    "' + key + '": "' + params[key] + '",\n')
+      fd.write('  },\n')
+      cnt = 0
+      fd.write('  "hipcc_version": {\n')
+      for key in params2:
+        cnt = cnt + 1
+        if cnt == len(params2):
+          fd.write('    "' + key + '": "' + params2[key] + '"\n')
+        else:
+          fd.write('    "' + key + '": "' + params2[key] + '",\n')
+      fd.write('  }\n')
+      fd.write('},\n')
+      fd.write('"traceEvents":[{}\n');
 
   def close_json(self, file_name):
     if not re.search(r'\.json$', file_name):
