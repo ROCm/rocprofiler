@@ -116,7 +116,7 @@ class SQLiteDB:
     with open(file_name, mode='w') as fd:
       cnt = 0
       fd.write('{\n')
-      fd.write('"comments": {\n')
+      fd.write('"otherData": {\n')
       fd.write('  "rocminfo": {\n')
       for key in params:
         cnt = cnt + 1
