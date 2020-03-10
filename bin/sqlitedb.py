@@ -86,17 +86,6 @@ class SQLiteDB:
   def table_get_rows(self, table_name):
     return self._get_raws(table_name)
 
-  # dump CSV table
-  def dump_csv(self, table_name, file_name):
-    if not re.search(r'\.csv$', file_name):
-      raise Exception('wrong output file type: "' + file_name + '"' )
-
-    fields = self._get_fields(table_name)
-    with open(file_name, mode='w') as fd:
-      fd.write(','.join(fields) + '\n')
-      for raw in self._get_raws(table_name):
-        fd.write(reduce(lambda a, b: str(a) + ',' + str(b), raw) + '\n')
-
   # execute query on DB
   def execute(self, cmd):
     cursor = self.connection.cursor()
@@ -141,17 +130,5 @@ class SQLiteDB:
 
     if len(fields_left) > 0: raise Exception('types not found for fields: ', fields_left)
     return (field_names, field_types)
-
-  # add CSV table
-  def add_csv_table(self, table_name, file_name, extra = ()):
-    with open(file_name, mode='r') as fd:
-      # get CSV table descriptor
-      descr = self._get_csv_descr(table_name, fd)
-      # reader to populate the table
-      fd.seek(0)
-      reader = csv.reader(fd)
-      reader.next()
-      table = self.add_table(table_name, descr, extra)
-      self.insert_table(table, reader)
 
 ##############################################################################################
