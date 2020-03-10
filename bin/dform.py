@@ -22,6 +22,7 @@
 ################################################################################
 
 from sqlitedb import SQLiteDB
+from csv_builder import CSV
 
 def gen_message(outfile):
   if outfile != '':
@@ -33,7 +34,8 @@ def post_process_data(db, table_name, outfile = ''):
 #  db.add_data_column('A', 'TotalDurNs', 'INTEGER', 'CompleteNs - DispatchNs')
 #  db.add_data_column(table_name, 'TimeNs', 'INTEGER', 'BeginNs - %d' % start_ns)
   db.add_data_column(table_name, 'DurationNs', 'INTEGER', 'EndNs - BeginNs')
-  if outfile != '': db.dump_csv(table_name, outfile)
+  csv_obj = CSV(outfile)
+  if outfile != '': cvs_obj.dump_csv_fromdb(table_name) 
   gen_message(outfile)
 
 def gen_data_bins(db, outfile):
