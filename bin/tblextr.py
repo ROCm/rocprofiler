@@ -23,11 +23,36 @@
 ################################################################################
 
 import os, sys, re
-from globals import *
 from sqlitedb import SQLiteDB
 from json_utils import JSON 
-from csv_utils import CSV 
+from csv_builder import CSV 
 import dform
+
+EXT_PID = 0
+COPY_PID = 1
+HIP_PID = 2
+HSA_PID = 3
+KFD_PID = 4
+OPS_PID = 5
+GPU_BASE_PID = 6
+NONE_PID = -1
+
+max_gpu_id = -1
+START_US = 0
+
+hsa_activity_found = 0
+
+# dependencies dictionary
+#dep_dict = {}
+#kern_dep_list = []
+
+# global vars
+table_descr = [
+  ['Index', 'KernelName'],
+  {'Index': 'INTEGER', 'KernelName': 'TEXT'}
+]
+var_list = table_descr[0]
+var_table = {}
 
 # Parsing results in the format:
 #dispatch[0], queue_index(0), kernel_name("SimpleConvolution"), time(1048928000311041,1048928006154674,1048928006168274,1048928006170503):
@@ -425,7 +450,7 @@ if inext == '.txt':
 
 if dbfile == '':
   csv_obj = CSV(csvfile)
-  csv_obj.dump_csv()
+  csv_obj.dump_csv_fromtable(var_list,var_table)
 else:
   statfile = re.sub(r'\.csv$', '.stats.csv', csvfile)
   jsonfile = re.sub(r'\.csv$', '.json', csvfile)
@@ -485,27 +510,28 @@ else:
     if hsa_trace_found and 'BeginNs' in var_list:
       dform.gen_kernel_json_trace(db, 'A', GPU_BASE_PID, START_US, json_obj)
 
+  tag = ''
   if hsa_trace_found:
-    dform.post_process_data(db, 'HSA')
-    dform.gen_table_bins(db, 'HSA', hsa_statfile, 'Name', 'DurationNs')
-    dform.gen_api_json_trace(db, 'HSA', START_US, json_obj)
-
+    tag = 'HSA'
+    tagfile = hsa_statfile
   if hsa_activity_found:
-    dform.post_process_data(db, 'COPY')
-    dform.gen_api_json_trace(db, 'COPY', START_US, json_obj)
-
+    tag = 'COPY'
+    tagfile = ''
   if hip_trace_found:
-    dform.post_process_data(db, 'HIP')
-    dform.gen_table_bins(db, 'HIP', hip_statfile, 'Name', 'DurationNs')
-    dform.gen_api_json_trace(db, 'HIP', START_US, json_obj)
-
-    dform.post_process_data(db, 'OPS')
-    dform.gen_ops_json_trace(db, 'OPS', GPU_BASE_PID, START_US, json_obj)
-
+    tag = 'HIP'
+    tagfile = hip_statfile
   if kfd_trace_found:
-    dform.post_process_data(db, 'KFD')
-    dform.gen_table_bins(db, 'KFD', kfd_statfile, 'Name', 'DurationNs')
-    dform.gen_api_json_trace(db, 'KFD', START_US, json_obj)
+    tag = 'KFD'
+    tagfile = kfd_statfile
+
+  if tag == 'HSA' or tag == 'KFD' or tag == 'COPY' or tag == 'HIP':
+    dform.post_process_data(db, tag)
+    if tagfile != '':
+      dform.gen_table_bins(db, tag, tagfile, 'Name', 'DurationNs')
+    dform.gen_api_json_trace(db, tag, START_US, json_obj)
+    if tag == 'HIP':
+      dform.post_process_data(db, 'OPS')
+      dform.gen_ops_json_trace(db, 'OPS', GPU_BASE_PID, START_US, json_obj)
 
   if any_trace_found:
     for (to_pid, dep_str) in dep_dict.items():
