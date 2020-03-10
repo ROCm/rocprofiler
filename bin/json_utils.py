@@ -23,7 +23,6 @@
 ################################################################################
 
 import os, sys, re
-import globals
 import commands
 
 class JSON:
