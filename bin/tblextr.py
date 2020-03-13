@@ -25,6 +25,7 @@
 import os, sys, re
 from sqlitedb import SQLiteDB
 import dform
+from txt2params import gen_params
 
 # Parsing results in the format:
 #dispatch[0], queue_index(0), kernel_name("SimpleConvolution"), time(1048928000311041,1048928006154674,1048928006168274,1048928006170503):
@@ -58,6 +59,48 @@ table_descr = [
 var_list = table_descr[0]
 var_table = {}
 #############################################################
+
+def json_metadata_gen(sysinfo_file, index):
+    if not re.search(r'\.txt$', sysinfo_file):
+      raise Exception('wrong output file type: "' + sysinfo_file + '"' )
+    if index == 1:
+      status, output = commands.getstatusoutput("/opt/rocm/bin/rocminfo > " + sysinfo_file)
+      if status != 0 :
+        raise Exception('Could not run command: rocminfo')
+      params = gen_params(sysinfo_file);
+    elif index == 2:
+      status, output = commands.getstatusoutput("/opt/rocm/bin/hipcc --version >" + sysinfo_file)
+      if status != 0 :
+        raise Exception('Could not run command: hipcc --version')
+      params = gen_params(sysinfo_file);
+    return params
+
+def json_metadata_write(jsonfile, params, params2):
+    with open(jsonfile, mode='a') as fd:
+      cnt = 0
+      fd.write('],\n')
+      fd.write('"otherData": {\n')
+      fd.write('  "rocminfo": {\n')
+      for key in params:
+        cnt = cnt + 1
+        if cnt == len(params):
+          fd.write('    "' + key + '": "' + params[key] + '"\n')
+        else:
+          fd.write('    "' + key + '": "' + params[key] + '",\n')
+      if len(params2) == 0:
+        fd.write('  }\n')
+        return
+      fd.write('  },\n')
+      cnt = 0
+      fd.write('  "hipcc_version": {\n')
+      for key in params2:
+        cnt = cnt + 1
+        if cnt == len(params2):
+          fd.write('    "' + key + '": "' + params2[key] + '"\n')
+        else:
+          fd.write('    "' + key + '": "' + params2[key] + '",\n')
+      fd.write('  }\n')
+      fd.write('}\n')
 
 def fatal(msg):
   sys.stderr.write(sys.argv[0] + ": " + msg + "\n");
@@ -239,11 +282,13 @@ def fill_ext_db(table_name, db, indir, trace_name, api_pid):
           continue
 
         if cid == 2:
+          if not pid in range_stack: fatal("ROCTX range begin not found, pid(" + pid + ")");
           pid_stack = range_stack[pid]
+          if not tid in pid_stack: fatal("ROCTX range begin not found, tid(" + tid + ")");
           rec_stack = pid_stack[tid]
           rec_vals = rec_stack.pop()
           rec_vals[1] = tms
-
+ 
         db.insert_entry(table_handle, rec_vals)
         record_id += 1
 
@@ -449,6 +494,8 @@ else:
   hsa_statfile = re.sub(r'\.stats\.csv$', r'.hsa_stats.csv', statfile)
   hip_statfile = re.sub(r'\.stats\.csv$', r'.hip_stats.csv', statfile)
   kfd_statfile = re.sub(r'\.stats\.csv$', r'.kfd_stats.csv', statfile)
+  sysinfo_file = re.sub(r'\.stats\.csv$', r'.sysinfo_stats.txt', statfile)
+  params = json_metadata_gen(sysinfo_file, 1)
 
   with open(dbfile, mode='w') as fd: fd.truncate()
   db = SQLiteDB(dbfile)
@@ -514,6 +561,9 @@ else:
     dform.post_process_data(db, 'OPS')
     dform.gen_ops_json_trace(db, 'OPS', GPU_BASE_PID, START_US, jsonfile)
 
+    sysinfo_file2 = re.sub(r'\.stats\.csv$', r'.sysinfo_stats2.txt', statfile)
+    params2 = json_metadata_gen(sysinfo_file2, 2)
+
   if kfd_trace_found:
     dform.post_process_data(db, 'KFD')
     dform.gen_table_bins(db, 'KFD', kfd_statfile, 'Name', 'DurationNs')
@@ -544,6 +594,7 @@ else:
       dep_id += len(tid_list)
 
   if any_trace_found:
+    json_metadata_write(jsonfile, params, params2)
     db.close_json(jsonfile);
   db.close()
 
