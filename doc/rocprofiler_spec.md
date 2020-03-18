@@ -221,7 +221,11 @@ typedef struct {
 	union {
 		struct {
 			const char* name;		// metric name
+			uint32_t instances;		// instances number
+			const char* expr;		// metric expression, NULL for basic counters
 			const char* description;	// metric description
+			const char* block_name;		// block name
+			uint32_t block_counters;	// number of block counters
 		} metric;
 		struct {
 			const char* name;		// trace name
