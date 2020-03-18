@@ -595,11 +595,11 @@ Info data callback:
         switch (info.kind) {
             case ROCPROFILER_INFO_KIND_METRIC: {
                 if (info.metric.expr != NULL) {
-                    fprintf(stdout, "Basic counter:  gpu-agent%d : %s : %s\n",
+                    fprintf(stdout, "Derived counter:  gpu-agent%d : %s : %s\n",
                         info.agent_index, info.metric.name, info.metric.description);
                     fprintf(stdout, "      %s = %s\n", info.metric.name, info.metric.expr);
                 } else {
-                    fprintf(stdout, "Derived counter:  gpu-agent%d : %s",
+                    fprintf(stdout, "Basic counter:  gpu-agent%d : %s",
                         info.agent_index, info.metric.name);
                     if (info.metric.instances > 1) {
                         fprintf(stdout, "[0-%u]", info.metric.instances - 1);
