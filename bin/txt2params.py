@@ -24,6 +24,11 @@
 
 import os, sys, re
 
+# gen_params() takes a text file like the output of rocminfo cmd and parses it into a map {key,value}
+# where key is the param and value is the value of this param
+# for example: Threadmodel : "posix"
+# it also processes encompasing sections to generate a full param name such as (section names separated by '_'):
+#     "Agent2_PoolInfo_ISAInfo_ISA1_WorkgroupMaxSizeperDimension_x": "1024(0x400)",
 def gen_params(txtfile):
   fields = {} 
   parent_field = ''
@@ -32,12 +37,24 @@ def gen_params(txtfile):
   check_for_dims = False
   with open(txtfile) as fp: 
     for line in fp: 
-      mv = re.match(r'HCC clang version\s+(.*)',line)
+      me = re.match(r'\*\*\* Done \*\*\*',line) #Marks the end of cmd
+      if me:
+        parent_field = ''
+        nbr_indent = 0
+        nbr_indent_prev = 0
+        check_for_dims = False
+        continue
+      mv = re.match(r'HCC clang version\s+(.*)',line) # outlier: only line with a version number and no ':', special case
       if mv:
         key = 'HCCclangversion'
         val = mv.group(1)
         fields[key] = val
         continue
+      # Variable 'check_for_dims' is True for text like this:
+      # Workgroup Max Size per Dimension:
+      #     x                        1024(0x400)
+      #     y                        1024(0x400)
+      #     z                        1024(0x400)
       if check_for_dims == True:
         mc = re.match(r'\s*([x|y|z])\s+(.*)',line) 
         if mc:
@@ -62,11 +79,14 @@ def gen_params(txtfile):
             parent_field = tmp
             continue
 
-      if nbr_indent < nbr_indent_prev:
+      if nbr_indent < nbr_indent_prev: 
         pos = parent_field.rfind('_')
         if pos != -1:
-          parent_field = parent_field[:pos] # remove last _*
+          parent_field = parent_field[:pos]
 
+      # Process lines such as :
+      # Segment:                 GLOBAL; FLAGS: KERNARG, FINE GRAINED
+      # Size:                    131897644(0x7dc992c) KB
       for lin in line.split(';'):
         lin = re.sub(r"\s+", "", lin)
         m = re.match(r'(.*):(.*)', lin)
@@ -86,3 +106,4 @@ def gen_params(txtfile):
             parent_field = parent_field + '_' + lin.replace(':','')
 
   return fields 
+
