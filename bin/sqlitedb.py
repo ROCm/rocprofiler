@@ -97,7 +97,6 @@ class SQLiteDB:
       fd.write(','.join(fields) + '\n')
       for raw in self._get_raws(table_name):
         fd.write(reduce(lambda a, b: str(a) + ',' + str(b), raw) + '\n')
-
  
   # dump JSON trace
   def open_json(self, file_name):
@@ -231,6 +230,20 @@ class SQLiteDB:
       reader.next()
       table = self.add_table(table_name, descr, extra)
       self.insert_table(table, reader)
+
+  def metadata_json(self, jsonfile, sysinfo_file):
+    params = gen_params(sysinfo_file);
+    with open(jsonfile, mode='a') as fd:
+      cnt = 0
+      fd.write('],\n')
+      fd.write('"otherData": {\n')
+      for key in params:
+        cnt = cnt + 1
+        if cnt == len(params):
+          fd.write('    "' + key + '": "' + params[key] + '"\n')
+        else:
+          fd.write('    "' + key + '": "' + params[key] + '",\n')
+      fd.write('  }\n')
 
 ##############################################################################################
 
