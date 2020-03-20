@@ -59,6 +59,17 @@ var_list = table_descr[0]
 var_table = {}
 #############################################################
 
+def metadata_gen(sysinfo_file, sysinfo_cmd):
+  if not re.search(r'\.txt$', sysinfo_file):
+    raise Exception('wrong output file type: "' + sysinfo_file + '"' )
+  if re.search(r'rocminfo', sysinfo_cmd):
+    direct_str = " > "
+  else:
+    direct_str = " >> "
+  status, output = commands.getstatusoutput(sysinfo_cmd + direct_str + sysinfo_file)
+  if status != 0 :
+    raise Exception('Could not run command: ' + sysinfo_cmd)
+
 def fatal(msg):
   sys.stderr.write(sys.argv[0] + ": " + msg + "\n");
   sys.exit(1)
@@ -451,6 +462,8 @@ else:
   hsa_statfile = re.sub(r'\.stats\.csv$', r'.hsa_stats.csv', statfile)
   hip_statfile = re.sub(r'\.stats\.csv$', r'.hip_stats.csv', statfile)
   kfd_statfile = re.sub(r'\.stats\.csv$', r'.kfd_stats.csv', statfile)
+  sysinfo_file = re.sub(r'\.stats\.csv$', r'.sysinfo_stats.txt', statfile)
+  metadata_gen(sysinfo_file, '/opt/rocm/bin/rocminfo')
 
   with open(dbfile, mode='w') as fd: fd.truncate()
   db = SQLiteDB(dbfile)
@@ -516,6 +529,11 @@ else:
     dform.post_process_data(db, 'OPS')
     dform.gen_ops_json_trace(db, 'OPS', GPU_BASE_PID, START_US, jsonfile)
 
+    #sysinfo_file2 = re.sub(r'\.stats\.csv$', r'.sysinfo_stats2.txt', statfile)
+    #params2 = metadata_gen(sysinfo_file2, 2)
+    #params2 = 
+    metadata_gen(sysinfo_file, '/opt/rocm/bin/hipcc --version')
+
   if kfd_trace_found:
     dform.post_process_data(db, 'KFD')
     dform.gen_table_bins(db, 'KFD', kfd_statfile, 'Name', 'DurationNs')
@@ -546,6 +564,7 @@ else:
       dep_id += len(tid_list)
 
   if any_trace_found:
+    db.metadata_json(jsonfile, sysinfo_file)
     db.close_json(jsonfile);
   db.close()
 

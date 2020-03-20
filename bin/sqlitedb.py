@@ -1,5 +1,6 @@
 import csv, sqlite3, re, sys
 from functools import reduce
+from txt2params import gen_params
 
 # SQLite Database class
 class SQLiteDB:
@@ -96,7 +97,7 @@ class SQLiteDB:
       fd.write(','.join(fields) + '\n')
       for raw in self._get_raws(table_name):
         fd.write(reduce(lambda a, b: str(a) + ',' + str(b), raw) + '\n')
-
+ 
   # dump JSON trace
   def open_json(self, file_name):
     if not re.search(r'\.json$', file_name):
@@ -108,7 +109,7 @@ class SQLiteDB:
     if not re.search(r'\.json$', file_name):
       raise Exception('wrong output file type: "' + file_name + '"' )
     with open(file_name, mode='a') as fd:
-      fd.write(']}\n');
+      fd.write('}')
 
   def label_json(self, pid, label, file_name):
     if not re.search(r'\.json$', file_name):
@@ -230,4 +231,19 @@ class SQLiteDB:
       table = self.add_table(table_name, descr, extra)
       self.insert_table(table, reader)
 
+  def metadata_json(self, jsonfile, sysinfo_file):
+    params = gen_params(sysinfo_file);
+    with open(jsonfile, mode='a') as fd:
+      cnt = 0
+      fd.write('],\n')
+      fd.write('"otherData": {\n')
+      for key in params:
+        cnt = cnt + 1
+        if cnt == len(params):
+          fd.write('    "' + key + '": "' + params[key] + '"\n')
+        else:
+          fd.write('    "' + key + '": "' + params[key] + '",\n')
+      fd.write('  }\n')
+
 ##############################################################################################
+
