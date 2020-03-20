@@ -85,7 +85,7 @@ def dbglog(msg):
 # parse results method
 def parse_res(infile):
   global max_gpu_id
-  if not os.path.isfile(infile): return # fatal("Error: input file '" + infile + "' not found")
+  if not os.path.isfile(infile): return
   inp = open(infile, 'r')
 
   beg_pattern = re.compile("^dispatch\[(\d*)\], (.*) kernel-name\(\"([^\"]*)\"\)")
@@ -529,9 +529,6 @@ else:
     dform.post_process_data(db, 'OPS')
     dform.gen_ops_json_trace(db, 'OPS', GPU_BASE_PID, START_US, jsonfile)
 
-    #sysinfo_file2 = re.sub(r'\.stats\.csv$', r'.sysinfo_stats2.txt', statfile)
-    #params2 = metadata_gen(sysinfo_file2, 2)
-    #params2 = 
     metadata_gen(sysinfo_file, '/opt/rocm/bin/hipcc --version')
 
   if kfd_trace_found:
