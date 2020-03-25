@@ -115,7 +115,7 @@ class SQLiteDB:
     if not re.search(r'\.json$', file_name):
       raise Exception('wrong output file type: "' + file_name + '"' )
     with open(file_name, mode='a') as fd:
-      fd.write(',{"args":{"name":"%s %s"},"ph":"M","pid":%s,"name":"process_name"}\n' %(self.section_index, label, pid));
+      fd.write(',{"args":{"name":"%s"},"ph":"M","pid":%s,"name":"process_name","sort_index":%d}\n' %(label, pid, self.section_index));
     self.section_index += 1
 
   def flow_json(self, base_id, from_pid, from_tid, from_us_list, to_pid, to_us_dict, corr_id_list, start_us, file_name):
