@@ -237,12 +237,13 @@ class SQLiteDB:
       cnt = 0
       fd.write('],\n')
       fd.write('"otherData": {\n')
-      for key in params:
+      for nkey in sorted(params.keys()):
+        key = nkey[1] 
         cnt = cnt + 1
         if cnt == len(params):
-          fd.write('    "' + key + '": "' + params[key] + '"\n')
+          fd.write('    "' + key + '": "' + params[nkey] + '"\n')
         else:
-          fd.write('    "' + key + '": "' + params[key] + '",\n')
+          fd.write('    "' + key + '": "' + params[nkey] + '",\n')
       fd.write('  }\n')
 
 ##############################################################################################
