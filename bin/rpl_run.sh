@@ -35,6 +35,10 @@ RPL_PATH=$PKG_DIR/lib
 TLIB_PATH=$PKG_DIR/tool
 TTLIB_PATH=$TT_DIR/tool
 
+if [ -z "$ROCP_PYTHON_VERSION" ] ; then
+  ROCP_PYTHON_VERSION=python
+fi
+
 # Default HIP path
 if [ -z "$HIP_PATH" ] ; then
   export HIP_PATH=/opt/rocm/hip
@@ -162,14 +166,18 @@ usage() {
   echo "  --ctx-wait <on|off> - to wait for outstanding contexts on profiler exit [on]"
   echo "  --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]"
   echo "  --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]"
+  echo "  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]"
+  echo "    To support V3 code object"
   echo ""
   echo "  --stats - generating kernel execution stats, file <output name>.stats.csv"
-  echo "  --roctx-trace - to enable rocTX trace"
-  echo "  --kfd-trace - to trace KFD, generates API execution stats and JSON file chrome-tracing compatible"
+  echo ""
+  echo "  --roctx-trace - to enable rocTX application code annotation trace, \"Markers and Ranges\" JSON trace section."
+  echo "  --hip-trace - to trace HIP, generates API execution stats and JSON file chrome-tracing compatible"
   echo "  --hsa-trace - to trace HSA, generates API execution stats and JSON file chrome-tracing compatible"
   echo "  --sys-trace - to trace HIP/HSA APIs and GPU activity, generates stats and JSON trace chrome-tracing compatible"
-  echo "  --hip-trace - to trace HIP, generates API execution stats and JSON file chrome-tracing compatible"
-  echo "    Generated files: <output name>.hsa_stats.txt <output name>.json"
+  echo "    '--hsa-trace' can be used in addition to select activity tracing from HSA (ROCr runtime) level"
+  echo "  --kfd-trace - to trace KFD, generates KFD Thunk API execution stats and JSON file chrome-tracing compatible"
+  echo "    Generated files: <output name>.<domain>_stats.txt <output name>.json"
   echo "    Traced API list can be set by input .txt or .xml files."
   echo "    Input .txt:"
   echo "      hsa: hsa_queue_create hsa_amd_memory_pool_allocate"
@@ -182,18 +190,20 @@ usage() {
   echo "  --trace-start <on|off> - to enable tracing on start [on]"
   echo "  --trace-period <dealy:length:rate> - to enable trace with initial delay, with periodic sample length and rate"
   echo "    Supported time formats: <number(m|s|ms|us)>"
-  echo "  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]"
+  echo "  --flush-rate <rate> - to enable trace flush rate (time period)"
+  echo "    Supported time formats: <number(m|s|ms|us)>"
   echo ""
   echo "Configuration file:"
   echo "  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:${HOME}:<package path>"
   echo "  First the configuration file is looking in the current directory, then in your home, and then in the package directory."
-  echo "  Configurable options: 'basenames', 'timestamp', 'ctx-limit', 'heartbeat'."
+  echo "  Configurable options: 'basenames', 'timestamp', 'ctx-limit', 'heartbeat', 'obj-tracking'."
   echo "  An example of 'rpl_rc.xml':"
   echo "    <defaults"
   echo "      basenames=off"
   echo "      timestamp=off"
   echo "      ctx-limit=0"
   echo "      heartbeat=0"
+  echo "      obj-tracking=off"
   echo "    ></defaults>"
   echo ""
   exit 1
@@ -373,6 +383,7 @@ while [ 1 ] ; do
     GEN_STATS=1
   elif [ "$1" = "--roctx-trace" ] ; then
     ARG_VAL=0
+    GEN_STATS=1
     ROCTX_TRACE=1
   elif [ "$1" = "--kfd-trace" ] ; then
     ARG_VAL=0
@@ -414,6 +425,11 @@ while [ 1 ] ; do
     convert_time_val period_rate
     errck "Option '$ARG_IN', rate value"
     export ROCP_CTRL_RATE="$period_delay:$period_len:$period_rate"
+  elif [ "$1" = "--flush-rate" ] ; then
+    period_rate=$2
+    convert_time_val period_rate
+    errck "Option '$ARG_IN', rate value"
+    export ROCP_FLUSH_RATE="$period_rate"
   elif [ "$1" = "--obj-tracking" ] ; then
     if [ "$2" = "on" ] ; then
       export ROCP_OBJ_TRACKING=1
@@ -521,9 +537,9 @@ if [ -n "$csv_output" ] ; then
   if [ "$GEN_STATS" = "1" ] ; then
     db_output=$(echo $csv_output | sed "s/\.csv/.db/")
     merge_output $OUTPUT_LIST
-    python $BIN_DIR/tblextr.py $db_output $OUTPUT_LIST
+    $ROCP_PYTHON_VERSION $BIN_DIR/tblextr.py $db_output $OUTPUT_LIST
   else
-    python $BIN_DIR/tblextr.py $csv_output $OUTPUT_LIST
+    $ROCP_PYTHON_VERSION $BIN_DIR/tblextr.py $csv_output $OUTPUT_LIST
   fi
   if [ "$?" -ne 0 ] ; then
     echo "Data extracting error: $OUTPUT_LIST'"

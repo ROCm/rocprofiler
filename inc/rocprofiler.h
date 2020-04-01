@@ -41,8 +41,9 @@ THE SOFTWARE.
 #ifndef INC_ROCPROFILER_H_
 #define INC_ROCPROFILER_H_
 
-#include <hsa.h>
 #include <amd_hsa_kernel_code.h>
+#include <hsa.h>
+#include <hsa_ext_amd.h>
 #include <hsa_ven_amd_aqlprofile.h>
 #include <stdint.h>
 
@@ -70,6 +71,7 @@ typedef struct {
   uint32_t trace_local;
   uint64_t timeout;
   uint32_t timestamp_on;
+  uint32_t hsa_intercepting;
 } rocprofiler_settings_t;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -261,6 +263,10 @@ hsa_status_t rocprofiler_set_queue_callbacks(
 
 // Remove queue callbacks
 hsa_status_t rocprofiler_remove_queue_callbacks();
+
+// Start/stop queue callbacks
+hsa_status_t rocprofiler_start_queue_callbacks();
+hsa_status_t rocprofiler_stop_queue_callbacks();
 
 ////////////////////////////////////////////////////////////////////////////////
 // Start/stop profiling
@@ -455,6 +461,68 @@ hsa_status_t rocprofiler_pool_flush(
   rocprofiler_pool_t* pool);          // profiling pool handle
 
 ////////////////////////////////////////////////////////////////////////////////
+// HSA intercepting API
+
+// HSA callbacks ID enumeration
+typedef enum {
+  ROCPROFILER_HSA_CB_ID_ALLOCATE = 0, // Memory allocate callback
+  ROCPROFILER_HSA_CB_ID_DEVICE = 1,   // Device assign callback
+  ROCPROFILER_HSA_CB_ID_MEMCOPY = 2,  // Memcopy callback
+  ROCPROFILER_HSA_CB_ID_SUBMIT = 3    // Packet submit callback
+} rocprofiler_hsa_cb_id_t;
+
+// HSA callback data type
+typedef struct {
+  union {
+    struct {
+      const void* ptr;                                // allocated area ptr
+      size_t size;                                    // allocated area size, zero size means 'free' callback
+      hsa_amd_segment_t segment;                      // allocated area's memory segment type
+      hsa_amd_memory_pool_global_flag_t global_flag;  // allocated area's memory global flag
+      int is_code;                                    // equal to 1 if code is allocated
+    } allocate;
+    struct {
+      hsa_device_type_t type;                         // type of assigned device
+      uint32_t id;                                    // id of assigned device
+      hsa_agent_t agent;                              // device HSA agent handle
+      const void* ptr;                                // ptr the device is assigned to
+    } device;
+    struct {
+      const void* dst;                                // memcopy dst ptr
+      const void* src;                                // memcopy src ptr
+      size_t size;                                    // memcopy size bytes
+    } memcopy;
+    struct {
+      const void* packet;                             // submitted to GPU packet
+      const char* kernel_name;                        // kernel name, not NULL if dispatch
+      hsa_queue_t* queue;                             // HSA queue the kernel was submitted to
+      uint32_t device_type;                           // type of device the packed is submitted to
+      uint32_t device_id;                             // id of device the packed is submitted to
+    } submit;
+  };
+} rocprofiler_hsa_callback_data_t;
+
+// HSA callback function type
+typedef hsa_status_t (*rocprofiler_hsa_callback_fun_t)(
+  rocprofiler_hsa_cb_id_t id, // callback id
+  const rocprofiler_hsa_callback_data_t* data, // [in] callback data
+  void* arg); // [in/out] user passed data
+
+// HSA callbacks structure
+typedef struct {
+  rocprofiler_hsa_callback_fun_t allocate; // memory allocate callback
+  rocprofiler_hsa_callback_fun_t device; // agent assign callback
+  rocprofiler_hsa_callback_fun_t memcopy; // memory copy callback
+  rocprofiler_hsa_callback_fun_t submit; // packet submit callback
+} rocprofiler_hsa_callbacks_t;
+
+// Set callbacks. If the callback is NULL then it is disabled.
+// If callback returns a value that is not HSA_STATUS_SUCCESS the  callback
+// will be unregistered.
+hsa_status_t rocprofiler_set_hsa_callbacks(
+  const rocprofiler_hsa_callbacks_t callbacks, // HSA callback function
+  void* arg); // callback user data
+
 #ifdef __cplusplus
 }  // extern "C" block
 #endif  // __cplusplus

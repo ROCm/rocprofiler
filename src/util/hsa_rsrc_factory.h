@@ -164,10 +164,11 @@ struct AgentInfo {
   // Number of Shader Arrays Per Shader Engines in Gpu
   uint32_t shader_arrays_per_se;
 
-  // SGPR/VGPR block sizes
+  // SGPR/VGPR/LDS block sizes
   uint32_t sgpr_block_dflt;
   uint32_t sgpr_block_size;
   uint32_t vgpr_block_size;
+  static const uint32_t lds_block_size = 128 * 4;
 };
 
 // HSA timer class
@@ -361,7 +362,7 @@ class HsaRsrcFactory {
   uint8_t* AllocateCmdMemory(const AgentInfo* agent_info, size_t size);
 
   // Wait signal
-  void SignalWait(const hsa_signal_t& signal) const;
+  hsa_signal_value_t SignalWait(const hsa_signal_t& signal, const hsa_signal_value_t& signal_value) const;
 
   // Wait signal with signal value restore
   void SignalWaitRestore(const hsa_signal_t& signal, const hsa_signal_value_t& signal_value) const;
@@ -393,7 +394,7 @@ class HsaRsrcFactory {
   // Enable executables loading tracking
   static bool IsExecutableTracking() { return executable_tracking_on_; }
   static void EnableExecutableTracking(HsaApiTable* table);
-  static const char* GetKernelName(uint64_t addr);
+  static const char* GetKernelNameRef(uint64_t addr);
 
   // Initialize HSA API table
   void static InitHsaApiTable(HsaApiTable* table);

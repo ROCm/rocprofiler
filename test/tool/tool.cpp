@@ -483,7 +483,7 @@ bool dump_context_entry(context_entry_t* entry) {
     entry->data.thread_id,
     entry->kernel_properties.grid_size,
     entry->kernel_properties.workgroup_size,
-    (entry->kernel_properties.lds_size * (128 * 4)),
+    (entry->kernel_properties.lds_size + (AgentInfo::lds_block_size - 1)) & ~(AgentInfo::lds_block_size - 1),
     entry->kernel_properties.scratch_size,
     (entry->kernel_properties.vgpr_count + 1) * agent_info->vgpr_block_size,
     (entry->kernel_properties.sgpr_count + agent_info->sgpr_block_dflt) * agent_info->sgpr_block_size,
@@ -659,7 +659,7 @@ hsa_status_t dispatch_callback(const rocprofiler_callback_data_t* callback_data,
   uint64_t workgroup_size = packet->workgroup_size_x * packet->workgroup_size_y * packet->workgroup_size_z;
   if (workgroup_size > UINT32_MAX) abort();
   kernel_properties_ptr->workgroup_size = (uint32_t)workgroup_size;
-  kernel_properties_ptr->lds_size = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc2, AMD_COMPUTE_PGM_RSRC_TWO_GRANULATED_LDS_SIZE); // packet->group_segment_size;
+  kernel_properties_ptr->lds_size = packet->group_segment_size;
   kernel_properties_ptr->scratch_size = packet->private_segment_size;
   kernel_properties_ptr->vgpr_count = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_GRANULATED_WORKITEM_VGPR_COUNT);
   kernel_properties_ptr->sgpr_count = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_GRANULATED_WAVEFRONT_SGPR_COUNT);
@@ -826,6 +826,60 @@ static inline void check_env_var(const char* var_name, uint64_t& val) {
   if (str != NULL ) val = atoll(str);
 }
 
+// HSA intercepting routines
+
+// HSA unified callback function
+hsa_status_t hsa_unified_callback(
+  rocprofiler_hsa_cb_id_t id,
+  const rocprofiler_hsa_callback_data_t* data,
+  void* arg)
+{
+  printf("hsa_unified_callback(%d, %p, %p):\n", (int)id, data, arg);
+
+  switch (id) {
+    case ROCPROFILER_HSA_CB_ID_ALLOCATE:
+      printf("  alloc ptr = %p\n", data->allocate.ptr);
+      printf("  alloc size = %zu\n", data->allocate.size);
+      printf("  segment type = 0x%x\n", data->allocate.segment);
+      printf("  global flag = 0x%x\n", data->allocate.global_flag);
+      printf("  is_code = %x\n", data->allocate.is_code);
+      break;
+    case ROCPROFILER_HSA_CB_ID_DEVICE:
+      printf("  device type = 0x%x\n", data->device.type);
+      printf("  device id = %u\n", data->device.id);
+      printf("  device agent = 0x%lx\n", data->device.agent.handle);
+      printf("  assigned ptr = %p\n", data->device.ptr);
+      break;
+    case ROCPROFILER_HSA_CB_ID_MEMCOPY:
+      printf("  memcopy dst = %p\n", data->memcopy.dst);
+      printf("  memcopy src = %p\n", data->memcopy.src);
+      printf("  memcopy size = %zu\n", data->memcopy.size);
+      break;
+    case ROCPROFILER_HSA_CB_ID_SUBMIT:
+      printf("  packet %p\n", data->submit.packet);
+      if (data->submit.kernel_name != NULL) {
+        printf("  submit kernel \"%s\"\n", data->submit.kernel_name);
+        printf("  device type = %u\n", data->submit.device_type);
+        printf("  device id = %u\n", data->submit.device_id);
+      }
+      break;
+    default:
+      printf("Unknown callback id(%u)\n", id);
+      abort();
+  }
+
+  fflush(stdout);
+  return HSA_STATUS_SUCCESS;
+}
+
+// HSA callbacks structure
+rocprofiler_hsa_callbacks_t hsa_callbacks {
+  hsa_unified_callback,
+  hsa_unified_callback,
+  hsa_unified_callback,
+  hsa_unified_callback
+};
+
 // Tool constructor
 extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
 {
@@ -908,6 +962,9 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
   check_env_var("ROCP_OBJ_TRACKING", settings->code_obj_tracking);
   // Set memcopies tracking
   check_env_var("ROCP_MCOPY_TRACKING", settings->memcopy_tracking);
+  // Set HSA intercepting
+  check_env_var("ROCP_HSA_INTERC", settings->hsa_intercepting);
+  if (settings->hsa_intercepting) rocprofiler_set_hsa_callbacks(hsa_callbacks, (void*)14);
 
   is_trace_local = settings->trace_local;
 
