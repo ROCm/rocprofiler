@@ -30,14 +30,8 @@ THE SOFTWARE.
 #include <sstream>
 #include <vector>
 
-#include "ctrl/run_kernel.h"
-#include "ctrl/test_aql.h"
-#include "ctrl/test_hsa.h"
 #include "inc/rocprofiler.h"
-#include "dummy_kernel/dummy_kernel.h"
-#include "simple_convolution/simple_convolution.h"
-#include "util/test_assert.h"
-#include "util/xml.h"
+#include "util/hsa_rsrc_factory.h"
 
 #define PUBLIC_API __attribute__((visibility("default")))
 #define CONSTRUCTOR_API __attribute__((constructor))
@@ -228,7 +222,7 @@ hsa_status_t dispatch_callback(const rocprofiler_callback_data_t* callback_data,
 
 unsigned metrics_input(rocprofiler_feature_t** ret) {
   // Profiling feature objects
-  const unsigned feature_count = 9;
+  const unsigned feature_count = 6;
   rocprofiler_feature_t* features = new rocprofiler_feature_t[feature_count];
   memset(features, 0, feature_count * sizeof(rocprofiler_feature_t));
 
@@ -245,12 +239,12 @@ unsigned metrics_input(rocprofiler_feature_t** ret) {
   features[4].name = "SQ_INSTS_VALU";
   features[5].kind = ROCPROFILER_FEATURE_KIND_METRIC;
   features[5].name = "VALUInsts";
-  features[6].kind = ROCPROFILER_FEATURE_KIND_METRIC;
-  features[6].name = "TCC_HIT_sum";
-  features[7].kind = ROCPROFILER_FEATURE_KIND_METRIC;
-  features[7].name = "TCC_MISS_sum";
-  features[8].kind = ROCPROFILER_FEATURE_KIND_METRIC;
-  features[8].name = "WRITE_SIZE";
+//  features[6].kind = ROCPROFILER_FEATURE_KIND_METRIC;
+//  features[6].name = "TCC_HIT_sum";
+//  features[7].kind = ROCPROFILER_FEATURE_KIND_METRIC;
+//  features[7].name = "TCC_MISS_sum";
+//  features[8].kind = ROCPROFILER_FEATURE_KIND_METRIC;
+//  features[8].name = "WRITE_SIZE";
 
   *ret = features;
   return feature_count;
