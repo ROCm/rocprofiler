@@ -32,9 +32,12 @@ fi
 test_status=0
 test_runnum=0
 test_number=0
+failed_tests="Failed tests:"
+
 xeval_test() {
   test_number=$test_number
 }
+
 eval_test() {
   label=$1
   cmdline=$2
@@ -44,6 +47,7 @@ eval_test() {
     eval "$cmdline"
     if [ $? != 0 ] ; then
       echo "$label: FAILED"
+      failed_tests="$failed_tests\n  $test_number: \"$label\""
       test_status=$(($test_status + 1))
     else
       echo "$label: PASSED"
@@ -52,18 +56,22 @@ eval_test() {
   test_number=$((test_number + 1))
 }
 
-# enable tools load failure reporting
-export HSA_TOOLS_REPORT_LOAD_FAILURE=1
 # paths to ROC profiler and oher libraries
 export LD_LIBRARY_PATH=$PWD
+
+# enable tools load failure reporting
+export HSA_TOOLS_REPORT_LOAD_FAILURE=1
 # enable error messages logging to '/tmp/rocprofiler_log.txt'
 export ROCPROFILER_LOG=1
-# ROC profiler metrics config file
+# enable error messages logging to '/tmp/aql_profile_log.txt'
+export HSA_VEN_AMD_AQLPROFILE_LOG=1
+# test trace
+export ROC_TEST_TRACE=1
+
+# Disabple profiler own proxy queue
 unset ROCP_PROXY_QUEUE
 # ROC profiler metrics config file
 export ROCP_METRICS=metrics.xml
-# test trace
-export ROC_TEST_TRACE=1
 
 ## C test
 eval_test "C test" ./test/c_test
@@ -72,17 +80,26 @@ eval_test "C test" ./test/c_test
 unset HSA_TOOLS_LIB
 unset ROCP_TOOL_LIB
 eval_test "Standalone sampling usage model test" ./test/standalone_test
+# Standalone intercepting test
+# ROC profiler library loaded by HSA runtime
+export HSA_TOOLS_LIB=librocprofiler64.so.1
+# enable intercepting mode in rocprofiler
+export ROCP_HSA_INTERCEPT=2
+# test macro for kernel iterations number
+export ROCP_KITER=100
+# test macro for per-kernel dispatching number
+export ROCP_DITER=10
+eval_test "Standalone intercepting test" ./test/stand_intercept_test
+unset ROCP_HSA_INTERCEPT
 
 ## Intercepting usage model test
-# ROC profiler library loaded by HSA runtime
-export HSA_TOOLS_LIB=librocprofiler64.so
 # tool library loaded by ROC profiler
 export ROCP_TOOL_LIB=./test/libintercept_test.so
 export ROCP_KITER=50
 export ROCP_DITER=50
 export ROCP_AGENTS=1
 export ROCP_THRS=3
-eval_test "Intercepting usage model test" "../bin/run_tool.sh ./test/ctrl"
+eval_test "Intercepting usage model test" ./test/ctrl
 
 ## Libtool test
 # tool library loaded by ROC profiler
@@ -125,9 +142,26 @@ export ROCP_OBJ_TRACKING=1
 export ROCP_INPUT=input1.xml
 eval_test "libtool test, OpenCL sample" ./test/ocl/SimpleConvolution
 
+# Memcopies tracking
+unset ROCP_MCOPY_TRACKING
+# enable HSA intercepting
+export ROCP_HSA_INTERC=1
+
+export ROCP_KITER=10
+export ROCP_DITER=10
+export ROCP_INPUT=input1.xml
+eval_test "libtool test, counter sets" ./test/ctrl
+
+## OpenCL test
+export ROCP_OBJ_TRACKING=1
+eval_test "libtool test, OpenCL sample" ./test/ocl/SimpleConvolution
+
 #valgrind --leak-check=full $tbin
 #valgrind --tool=massif $tbin
 #ms_print massif.out.<N>
 
 echo "$test_number tests total / $test_runnum tests run / $test_status tests failed"
+if [ $test_status != 0 ] ; then
+  echo $failed_tests
+fi
 exit $test_status

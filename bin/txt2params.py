@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 ################################################################################
 # Copyright (c) 2018 Advanced Micro Devices, Inc. All rights reserved.
 #
@@ -30,13 +28,14 @@ import os, sys, re
 # it also processes encompasing sections to generate a full param name such as (section names separated by '_'):
 #     "Agent2_PoolInfo_ISAInfo_ISA1_WorkgroupMaxSizeperDimension_x": "1024(0x400)",
 def gen_params(txtfile):
-  fields = {} 
+  fields = {}
+  counter = 0
   parent_field = ''
   nbr_indent = 0
   nbr_indent_prev = 0
   check_for_dims = False
-  with open(txtfile) as fp: 
-    for line in fp: 
+  with open(txtfile) as fp:
+    for line in fp:
       me = re.match(r'\*\*\* Done \*\*\*',line) #Marks the end of cmd
       if me:
         parent_field = ''
@@ -48,7 +47,8 @@ def gen_params(txtfile):
       if mv:
         key = 'HCCclangversion'
         val = mv.group(1)
-        fields[key] = val
+        counter = counter + 1
+        fields[(counter,key)] = val
         continue
       # Variable 'check_for_dims' is True for text like this:
       # Workgroup Max Size per Dimension:
@@ -56,34 +56,35 @@ def gen_params(txtfile):
       #     y                        1024(0x400)
       #     z                        1024(0x400)
       if check_for_dims == True:
-        mc = re.match(r'\s*([x|y|z])\s+(.*)',line) 
+        mc = re.match(r'\s*([x|y|z])\s+(.*)',line)
         if mc:
           key_sav = mc.group(1)
           if parent_field != '':
-            key = parent_field + '_' + mc.group(1)
+            key = parent_field + '.' + mc.group(1)
           else:
             key = mc.group(1)
           val = re.sub(r"\s+", "", mc.group(2))
-          fields[key] = val
+          counter = counter + 1
+          fields[(counter,key)] = val
           if key_sav == 'z':
             check_for_dims = False
       nbr_indent_prev = nbr_indent
-      mi = re.search(r'^(\s+)\w+', line)
+      mi = re.search(r'^(\s+)\w+.*', line)
       md = re.search(':', line)
       if mi:
-        nbr_indent = len(mi.group(1)) / 2 #indentation cnt
+        nbr_indent = int(len(mi.group(1)) / 2) #indentation cnt
       else:
         if not md:
           tmp = re.sub(r"\s+", "", line)
           if tmp.isalnum():
             parent_field = tmp
-            continue
 
-      if nbr_indent < nbr_indent_prev: 
-        pos = parent_field.rfind('_')
-        if pos != -1:
-          parent_field = parent_field[:pos]
-
+      if nbr_indent < nbr_indent_prev:
+        go_back_parent = (nbr_indent_prev - nbr_indent)
+        for i in range(go_back_parent): #decrease as many levels up as needed
+          pos = parent_field.rfind('.')
+          if pos != -1:
+            parent_field = parent_field[:pos]
       # Process lines such as :
       # Segment:                 GLOBAL; FLAGS: KERNARG, FINE GRAINED
       # Size:                    131897644(0x7dc992c) KB
@@ -93,17 +94,17 @@ def gen_params(txtfile):
         if m:
           key, val = m.group(1), m.group(2)
           if parent_field != '':
-            key = parent_field + '_' + key
+            key = parent_field + '.' + key
           if val == '':
             mk = re.match(r'.*Dimension',key)
             if mk: # expect x,y,z on next 3 lines
                check_for_dims = True
-            parent_field = key 
+            parent_field = key
           else:
-            fields[key] = val
+            counter = counter + 1
+            fields[(counter,key)] = val
         else:
           if nbr_indent != nbr_indent_prev and not check_for_dims :
-            parent_field = parent_field + '_' + lin.replace(':','')
+            parent_field = parent_field + '.' + lin.replace(':','')
 
-  return fields 
-
+  return fields

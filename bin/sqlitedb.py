@@ -1,3 +1,25 @@
+################################################################################
+# Copyright (c) 2018 Advanced Micro Devices, Inc. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+################################################################################
+
 import csv, sqlite3, re, sys
 from functools import reduce
 from txt2params import gen_params
@@ -48,6 +70,11 @@ class SQLiteDB:
     cursor.execute('ALTER TABLE %s ADD COLUMN "%s" %s' % (table_name, data_label, data_type))
     cursor.execute('UPDATE %s SET %s = (%s);' % (table_name, data_label, data_expr))
 
+  def change_rec_name(self, table_name, rec_id, rec_name):
+    self.connection.execute('UPDATE ' + table_name + ' SET Name = ? WHERE "Index" = ?', (rec_name, rec_id))
+  def change_rec_tid(self, table_name, rec_id, tid):
+    self.connection.execute('UPDATE ' + table_name + ' SET tid = ? WHERE "Index" = ?', (tid, rec_id))
+
   # populate DB table entry
   def insert_entry(self, table, val_list):
     (cursor, stm) = table
@@ -77,8 +104,8 @@ class SQLiteDB:
   def _get_raws_indexed(self, table_name):
     cursor = self.connection.execute('SELECT * FROM ' + table_name + ' order by "Index" asc;')
     return cursor.fetchall()
-  def _get_raw_by_id(self, table_name, req_id):
-    cursor = self.connection.execute('SELECT * FROM ' + table_name + ' WHERE "Index"=?', (req_id,))
+  def _get_raw_by_id(self, table_name, rec_id):
+    cursor = self.connection.execute('SELECT * FROM ' + table_name + ' WHERE "Index"=?', (rec_id,))
     raws = cursor.fetchall()
     if len(raws) != 1:
       raise Exception('Index is not unique, table "' + table_name + '"')
@@ -97,7 +124,7 @@ class SQLiteDB:
       fd.write(','.join(fields) + '\n')
       for raw in self._get_raws(table_name):
         fd.write(reduce(lambda a, b: str(a) + ',' + str(b), raw) + '\n')
- 
+
   # dump JSON trace
   def open_json(self, file_name):
     if not re.search(r'\.json$', file_name):
@@ -115,7 +142,7 @@ class SQLiteDB:
     if not re.search(r'\.json$', file_name):
       raise Exception('wrong output file type: "' + file_name + '"' )
     with open(file_name, mode='a') as fd:
-      fd.write(',{"args":{"name":"%s"},"ph":"M","pid":%s,"name":"process_name","sort_index":%d}\n' %(label, pid, self.section_index));
+      fd.write(',{"args":{"name":"%s"},"ph":"M","pid":%s,"name":"process_name","sort_index":%d}\n' %(label, pid, self.section_index))
     self.section_index += 1
 
   def flow_json(self, base_id, from_pid, from_tid, from_us_list, to_pid, to_us_dict, corr_id_list, start_us, file_name):
@@ -133,6 +160,21 @@ class SQLiteDB:
           fd.write(',{"ts":%d,"ph":"s","cat":"DataFlow","id":%d,"pid":%s,"tid":%s,"name":"dep"}\n' % (from_ts, dep_id, str(from_pid), from_tid[ind]))
           fd.write(',{"ts":%d,"ph":"t","cat":"DataFlow","id":%d,"pid":%s,"tid":0,"name":"dep"}\n' % (to_ts, dep_id, str(to_pid)))
           dep_id += 1
+
+  def metadata_json(self, jsonfile, sysinfo_file):
+    params = gen_params(sysinfo_file);
+    with open(jsonfile, mode='a') as fd:
+      cnt = 0
+      fd.write('],\n')
+      fd.write('"otherData": {\n')
+      for nkey in sorted(params.keys()):
+        key = nkey[1]
+        cnt = cnt + 1
+        if cnt == len(params):
+          fd.write('    "' + key + '": "' + params[nkey] + '"\n')
+        else:
+          fd.write('    "' + key + '": "' + params[nkey] + '",\n')
+      fd.write('  }\n')
 
   def dump_json(self, table_name, data_name, file_name):
     if not re.search(r'\.json$', file_name):
@@ -231,19 +273,4 @@ class SQLiteDB:
       table = self.add_table(table_name, descr, extra)
       self.insert_table(table, reader)
 
-  def metadata_json(self, jsonfile, sysinfo_file):
-    params = gen_params(sysinfo_file);
-    with open(jsonfile, mode='a') as fd:
-      cnt = 0
-      fd.write('],\n')
-      fd.write('"otherData": {\n')
-      for key in params:
-        cnt = cnt + 1
-        if cnt == len(params):
-          fd.write('    "' + key + '": "' + params[key] + '"\n')
-        else:
-          fd.write('    "' + key + '": "' + params[key] + '",\n')
-      fd.write('  }\n')
-
 ##############################################################################################
-

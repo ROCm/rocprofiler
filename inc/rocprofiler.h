@@ -41,8 +41,9 @@ THE SOFTWARE.
 #ifndef INC_ROCPROFILER_H_
 #define INC_ROCPROFILER_H_
 
-#include <hsa.h>
 #include <amd_hsa_kernel_code.h>
+#include <hsa.h>
+#include <hsa_ext_amd.h>
 #include <hsa_ven_amd_aqlprofile.h>
 #include <stdint.h>
 
@@ -70,6 +71,7 @@ typedef struct {
   uint32_t trace_local;
   uint64_t timeout;
   uint32_t timestamp_on;
+  uint32_t hsa_intercepting;
 } rocprofiler_settings_t;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -87,7 +89,9 @@ hsa_status_t rocprofiler_error_string(
 // Profiling feature kind
 typedef enum {
   ROCPROFILER_FEATURE_KIND_METRIC = 0,
-  ROCPROFILER_FEATURE_KIND_TRACE = 1
+  ROCPROFILER_FEATURE_KIND_TRACE = 1,
+  ROCPROFILER_FEATURE_KIND_SPM_MOD = 2,
+  ROCPROFILER_FEATURE_KIND_PCSMP_MOD = 4
 } rocprofiler_feature_kind_t;
 
 // Profiling feture parameter
@@ -199,17 +203,25 @@ hsa_status_t rocprofiler_close(rocprofiler_t* context);  // [in] profiling conte
 hsa_status_t rocprofiler_reset(rocprofiler_t* context,  // [in] profiling context
                                uint32_t group_index);   // group index
 
+// Return context agent
+hsa_status_t rocprofiler_get_agent(rocprofiler_t* context,        // [in] profiling context
+                                   hsa_agent_t* agent);           // [out] GPU handle
+
 // Supported time value ID
 typedef enum {
   ROCPROFILER_TIME_ID_CLOCK_REALTIME = 0, // Linux realtime clock time
-  ROCPROFILER_TIME_ID_CLOCK_MONOTONIC = 1, // Linux monotonic clock time
+  ROCPROFILER_TIME_ID_CLOCK_REALTIME_COARSE = 1, // Linux realtime-coarse clock time
+  ROCPROFILER_TIME_ID_CLOCK_MONOTONIC = 2, // Linux monotonic clock time
+  ROCPROFILER_TIME_ID_CLOCK_MONOTONIC_COARSE = 3, // Linux monotonic-coarse clock time
+  ROCPROFILER_TIME_ID_CLOCK_MONOTONIC_RAW = 4, // Linux monotonic-raw clock time
 } rocprofiler_time_id_t;
 
 // Return time value for a given time ID and profiling timestamp
 hsa_status_t rocprofiler_get_time(
   rocprofiler_time_id_t time_id, // identifier of the particular time to convert the timesatmp
   uint64_t timestamp, // profiling timestamp
-  uint64_t* value_ns); // [out] returned time 'ns' value
+  uint64_t* value_ns, // [out] returned time 'ns' value, ignored if NULL
+  uint64_t* error_ns); // [out] returned time error 'ns' value, ignored if NULL
 
 ////////////////////////////////////////////////////////////////////////////////
 // Queue callbacks
@@ -237,7 +249,7 @@ typedef struct {
   const char* kernel_name;                             // Kernel name
   uint64_t kernel_object;                              // Kernel object address
   const amd_kernel_code_t* kernel_code;                // Kernel code pointer
-  int64_t thread_id;                                   // Thread id
+  uint32_t thread_id;                                   // Thread id
   const rocprofiler_dispatch_record_t* record;         // Dispatch record
 } rocprofiler_callback_data_t;
 
@@ -261,6 +273,10 @@ hsa_status_t rocprofiler_set_queue_callbacks(
 
 // Remove queue callbacks
 hsa_status_t rocprofiler_remove_queue_callbacks();
+
+// Start/stop queue callbacks
+hsa_status_t rocprofiler_start_queue_callbacks();
+hsa_status_t rocprofiler_stop_queue_callbacks();
 
 ////////////////////////////////////////////////////////////////////////////////
 // Start/stop profiling
@@ -455,6 +471,68 @@ hsa_status_t rocprofiler_pool_flush(
   rocprofiler_pool_t* pool);          // profiling pool handle
 
 ////////////////////////////////////////////////////////////////////////////////
+// HSA intercepting API
+
+// HSA callbacks ID enumeration
+typedef enum {
+  ROCPROFILER_HSA_CB_ID_ALLOCATE = 0, // Memory allocate callback
+  ROCPROFILER_HSA_CB_ID_DEVICE = 1,   // Device assign callback
+  ROCPROFILER_HSA_CB_ID_MEMCOPY = 2,  // Memcopy callback
+  ROCPROFILER_HSA_CB_ID_SUBMIT = 3    // Packet submit callback
+} rocprofiler_hsa_cb_id_t;
+
+// HSA callback data type
+typedef struct {
+  union {
+    struct {
+      const void* ptr;                                // allocated area ptr
+      size_t size;                                    // allocated area size, zero size means 'free' callback
+      hsa_amd_segment_t segment;                      // allocated area's memory segment type
+      hsa_amd_memory_pool_global_flag_t global_flag;  // allocated area's memory global flag
+      int is_code;                                    // equal to 1 if code is allocated
+    } allocate;
+    struct {
+      hsa_device_type_t type;                         // type of assigned device
+      uint32_t id;                                    // id of assigned device
+      hsa_agent_t agent;                              // device HSA agent handle
+      const void* ptr;                                // ptr the device is assigned to
+    } device;
+    struct {
+      const void* dst;                                // memcopy dst ptr
+      const void* src;                                // memcopy src ptr
+      size_t size;                                    // memcopy size bytes
+    } memcopy;
+    struct {
+      const void* packet;                             // submitted to GPU packet
+      const char* kernel_name;                        // kernel name, not NULL if dispatch
+      hsa_queue_t* queue;                             // HSA queue the kernel was submitted to
+      uint32_t device_type;                           // type of device the packed is submitted to
+      uint32_t device_id;                             // id of device the packed is submitted to
+    } submit;
+  };
+} rocprofiler_hsa_callback_data_t;
+
+// HSA callback function type
+typedef hsa_status_t (*rocprofiler_hsa_callback_fun_t)(
+  rocprofiler_hsa_cb_id_t id, // callback id
+  const rocprofiler_hsa_callback_data_t* data, // [in] callback data
+  void* arg); // [in/out] user passed data
+
+// HSA callbacks structure
+typedef struct {
+  rocprofiler_hsa_callback_fun_t allocate; // memory allocate callback
+  rocprofiler_hsa_callback_fun_t device; // agent assign callback
+  rocprofiler_hsa_callback_fun_t memcopy; // memory copy callback
+  rocprofiler_hsa_callback_fun_t submit; // packet submit callback
+} rocprofiler_hsa_callbacks_t;
+
+// Set callbacks. If the callback is NULL then it is disabled.
+// If callback returns a value that is not HSA_STATUS_SUCCESS the  callback
+// will be unregistered.
+hsa_status_t rocprofiler_set_hsa_callbacks(
+  const rocprofiler_hsa_callbacks_t callbacks, // HSA callback function
+  void* arg); // callback user data
+
 #ifdef __cplusplus
 }  // extern "C" block
 #endif  // __cplusplus

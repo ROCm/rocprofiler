@@ -56,6 +56,13 @@ THE SOFTWARE.
 #define DESTRUCTOR_API __attribute__((destructor))
 #define KERNEL_NAME_LEN_MAX 128
 
+#define ONLOAD_TRACE(str) \
+  if (getenv("ROCP_ONLOAD_TRACE")) do { \
+    std::cout << "PID(" << GetPid() << "): PROF_TOOL_LIB::" << __FUNCTION__ << " " << str << std::endl << std::flush; \
+  } while(0);
+#define ONLOAD_TRACE_BEG() ONLOAD_TRACE("begin")
+#define ONLOAD_TRACE_END() ONLOAD_TRACE("end")
+
 // Disoatch callback data type
 struct callbacks_data_t {
   rocprofiler_feature_t* features;
@@ -139,7 +146,10 @@ bool is_trace_local = true;
 // SPM trace enabled
 bool is_spm_trace = false;
 
+static inline uint32_t GetPid() { return syscall(__NR_getpid); }
 static inline uint32_t GetTid() { return syscall(__NR_gettid); }
+
+uint32_t my_pid = GetPid();
 
 // Error handler
 void fatal(const std::string msg) {
@@ -475,15 +485,16 @@ bool dump_context_entry(context_entry_t* entry) {
   const std::string nik_name = (to_truncate_names == 0) ? entry->data.kernel_name : filtr_kernel_name(entry->data.kernel_name);
   const AgentInfo* agent_info = HsaRsrcFactory::Instance().GetAgentInfo(entry->agent);
 
-  fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), tid(%lu), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), kernel-name(\"%s\")",
+  fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), kernel-name(\"%s\")",
     index,
     agent_info->dev_index,
     entry->data.queue_id,
     entry->data.queue_index,
+    my_pid,
     entry->data.thread_id,
     entry->kernel_properties.grid_size,
     entry->kernel_properties.workgroup_size,
-    (entry->kernel_properties.lds_size * (128 * 4)),
+    (entry->kernel_properties.lds_size + (AgentInfo::lds_block_size - 1)) & ~(AgentInfo::lds_block_size - 1),
     entry->kernel_properties.scratch_size,
     (entry->kernel_properties.vgpr_count + 1) * agent_info->vgpr_block_size,
     (entry->kernel_properties.sgpr_count + agent_info->sgpr_block_dflt) * agent_info->sgpr_block_size,
@@ -659,7 +670,7 @@ hsa_status_t dispatch_callback(const rocprofiler_callback_data_t* callback_data,
   uint64_t workgroup_size = packet->workgroup_size_x * packet->workgroup_size_y * packet->workgroup_size_z;
   if (workgroup_size > UINT32_MAX) abort();
   kernel_properties_ptr->workgroup_size = (uint32_t)workgroup_size;
-  kernel_properties_ptr->lds_size = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc2, AMD_COMPUTE_PGM_RSRC_TWO_GRANULATED_LDS_SIZE); // packet->group_segment_size;
+  kernel_properties_ptr->lds_size = packet->group_segment_size;
   kernel_properties_ptr->scratch_size = packet->private_segment_size;
   kernel_properties_ptr->vgpr_count = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_GRANULATED_WORKITEM_VGPR_COUNT);
   kernel_properties_ptr->sgpr_count = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_GRANULATED_WAVEFRONT_SGPR_COUNT);
@@ -826,9 +837,66 @@ static inline void check_env_var(const char* var_name, uint64_t& val) {
   if (str != NULL ) val = atoll(str);
 }
 
+// HSA intercepting routines
+
+// HSA unified callback function
+hsa_status_t hsa_unified_callback(
+  rocprofiler_hsa_cb_id_t id,
+  const rocprofiler_hsa_callback_data_t* data,
+  void* arg)
+{
+  printf("hsa_unified_callback(%d, %p, %p):\n", (int)id, data, arg);
+  if (data == NULL) abort();
+
+  switch (id) {
+    case ROCPROFILER_HSA_CB_ID_ALLOCATE:
+      printf("  alloc ptr = %p\n", data->allocate.ptr);
+      printf("  alloc size = %zu\n", data->allocate.size);
+      printf("  segment type = 0x%x\n", data->allocate.segment);
+      printf("  global flag = 0x%x\n", data->allocate.global_flag);
+      printf("  is_code = %x\n", data->allocate.is_code);
+      break;
+    case ROCPROFILER_HSA_CB_ID_DEVICE:
+      printf("  device type = 0x%x\n", data->device.type);
+      printf("  device id = %u\n", data->device.id);
+      printf("  device agent = 0x%lx\n", data->device.agent.handle);
+      printf("  assigned ptr = %p\n", data->device.ptr);
+      break;
+    case ROCPROFILER_HSA_CB_ID_MEMCOPY:
+      printf("  memcopy dst = %p\n", data->memcopy.dst);
+      printf("  memcopy src = %p\n", data->memcopy.src);
+      printf("  memcopy size = %zu\n", data->memcopy.size);
+      break;
+    case ROCPROFILER_HSA_CB_ID_SUBMIT:
+      printf("  packet %p\n", data->submit.packet);
+      if (data->submit.kernel_name != NULL) {
+        printf("  submit kernel \"%s\"\n", data->submit.kernel_name);
+        printf("  device type = %u\n", data->submit.device_type);
+        printf("  device id = %u\n", data->submit.device_id);
+      }
+      break;
+    default:
+      printf("Unknown callback id(%u)\n", id);
+      abort();
+  }
+
+  fflush(stdout);
+  return HSA_STATUS_SUCCESS;
+}
+
+// HSA callbacks structure
+rocprofiler_hsa_callbacks_t hsa_callbacks {
+  hsa_unified_callback,
+  hsa_unified_callback,
+  hsa_unified_callback,
+  hsa_unified_callback
+};
+
 // Tool constructor
 extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
 {
+  ONLOAD_TRACE_BEG();
+
   if (pthread_mutex_lock(&mutex) != 0) {
     perror("pthread_mutex_lock");
     abort();
@@ -855,7 +923,7 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
   }
   if (rcfile != NULL) {
     // Getting defaults
-    printf("ROCProfiler: rc-file '%s'\n", rcpath.c_str());
+    printf("ROCProfiler pid(%u): rc-file '%s'\n", GetPid(), rcpath.c_str());
     auto defaults_list = rcfile->GetNodes("top.defaults");
     for (auto* entry : defaults_list) {
       const auto& opts = entry->opts;
@@ -908,6 +976,9 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
   check_env_var("ROCP_OBJ_TRACKING", settings->code_obj_tracking);
   // Set memcopies tracking
   check_env_var("ROCP_MCOPY_TRACKING", settings->memcopy_tracking);
+  // Set HSA intercepting
+  check_env_var("ROCP_HSA_INTERC", settings->hsa_intercepting);
+  if (settings->hsa_intercepting) rocprofiler_set_hsa_callbacks(hsa_callbacks, (void*)14);
 
   is_trace_local = settings->trace_local;
 
@@ -936,7 +1007,7 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
       abort();
     }
     std::ostringstream oss;
-    oss << result_prefix << "/results.txt";
+    oss << result_prefix << "/" << GetPid() << "_results.txt";
     result_file_handle = fopen(oss.str().c_str(), "w");
     if (result_file_handle == NULL) {
       std::ostringstream errmsg;
@@ -1046,10 +1117,14 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
     if (err) { errno = err; perror("pthread_attr_init"); abort(); }
     err = pthread_create(&thread, &attr, monitor_thr_fun, NULL);
   }
+
+  ONLOAD_TRACE_END();
 }
 
 // Tool destructor
-extern "C" PUBLIC_API void OnUnloadTool() {
+void rocprofiler_unload(bool is_destr) {
+  ONLOAD_TRACE("begin loaded(" << is_loaded << ") destr(" << is_destr << ")");
+
   if (pthread_mutex_lock(&mutex) != 0) {
     perror("pthread_mutex_lock");
     abort();
@@ -1060,6 +1135,8 @@ extern "C" PUBLIC_API void OnUnloadTool() {
     perror("pthread_mutex_unlock");
     abort();
   }
+
+  if (is_destr) CTX_OUTSTANDING_WAIT = 0;
 
   // Unregister dispatch callback
   rocprofiler_remove_queue_callbacks();
@@ -1080,6 +1157,7 @@ extern "C" PUBLIC_API void OnUnloadTool() {
   }
   fflush(stdout);
 
+#if 0
   // Cleanup
   if (callbacks_data != NULL) {
     delete[] callbacks_data->features;
@@ -1096,8 +1174,19 @@ extern "C" PUBLIC_API void OnUnloadTool() {
   range_vec = NULL;
   delete context_array;
   context_array = NULL;
+#endif
+
+  ONLOAD_TRACE_END();
+}
+
+extern "C" PUBLIC_API void OnUnloadTool() {
+  ONLOAD_TRACE("begin loaded(" << is_loaded << ")");
+  if (is_loaded == true) rocprofiler_unload(false);
+  ONLOAD_TRACE_END();
 }
 
 extern "C" DESTRUCTOR_API void destructor() {
-  if (is_loaded == true) OnUnloadTool();
+  ONLOAD_TRACE("begin loaded(" << is_loaded << ")");
+  if (is_loaded == true) rocprofiler_unload(true);
+  ONLOAD_TRACE_END();
 }
