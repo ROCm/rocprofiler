@@ -52,6 +52,8 @@ To use the rocProfiler API you need the API header and to link your application 
   sudo pip install CppHeaderParser argparse sqlite3
  
  - To build and install to /opt/rocm/rocprofiler
+  Please use release branches/tags of 'amd-master' branch for development version.
+ 
   export CMAKE_PREFIX_PATH=/opt/rocm/include/hsa:/opt/rocm
 
   cd .../rocprofiler
