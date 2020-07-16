@@ -40,15 +40,22 @@ target_include_directories ( "c_test" PRIVATE ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH
 file( GLOB UTIL_SRC "${TEST_DIR}/util/*.cpp" )
 
 ## Standalone test sources
-set ( STEXE_NAME "standalone_test" )
-set ( STTST_SRC
+set ( ST_EXE_NAME "standalone_test" )
+set ( ST_TST_SRC
   ${TEST_DIR}/app/standalone_test.cpp
   ${TEST_DIR}/ctrl/test_hsa.cpp
 )
 
+## Standalone intercept test sources
+set ( STIN_EXE_NAME "stand_intercept_test" )
+set ( STIN_TST_SRC
+  ${TEST_DIR}/app/stand_intercept_test.cpp
+  ${TEST_DIR}/ctrl/test_hsa.cpp
+)
+
 ## Intercept test sources
-set ( INEXE_NAME "intercept_test" )
-set ( INTST_SRC
+set ( IN_EXE_NAME "intercept_test" )
+set ( IN_TST_SRC
   ${TEST_DIR}/app/intercept_test.cpp
   ${TEST_DIR}/ctrl/test_hsa.cpp
 )
@@ -61,26 +68,34 @@ set ( CTRL_SRC
 
 ## Dummy kernel
 set ( DUMMY_NAME dummy_kernel )
-execute_process ( COMMAND sh -xc "${TEST_DIR}/../bin/build_kernel.sh ${TEST_DIR}/${DUMMY_NAME}/${DUMMY_NAME} ${PROJECT_BINARY_DIR}" )
-
 ## Test kernel
 set ( TEST_NAME simple_convolution )
 set ( KERN_SRC ${TEST_DIR}/${TEST_NAME}/${TEST_NAME}.cpp )
-execute_process ( COMMAND sh -xc "${TEST_DIR}/../bin/build_kernel.sh ${TEST_DIR}/${TEST_NAME}/${TEST_NAME} ${PROJECT_BINARY_DIR}" )
+
+## Building test kernels
+add_custom_target( mytest
+  COMMAND sh -xc "${TEST_DIR}/../bin/build_kernel.sh ${TEST_DIR}/${DUMMY_NAME}/${DUMMY_NAME} ${PROJECT_BINARY_DIR} '${ROCM_ROOT_DIR}' '${GPU_TARGETS}'"
+  COMMAND sh -xc "${TEST_DIR}/../bin/build_kernel.sh ${TEST_DIR}/${TEST_NAME}/${TEST_NAME} ${PROJECT_BINARY_DIR} '${ROCM_ROOT_DIR}' '${GPU_TARGETS}'"
+)
 
 ## Building standalone test executable
-add_executable ( ${STEXE_NAME} ${STTST_SRC} ${UTIL_SRC} ${KERN_SRC} )
-target_include_directories ( ${STEXE_NAME} PRIVATE ${TEST_DIR} ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH} )
-target_link_libraries ( ${STEXE_NAME} ${ROCPROFILER_TARGET} ${HSA_RUNTIME_LIB} ${HSA_KMT_LIB} c stdc++ dl pthread rt )
+add_executable ( ${ST_EXE_NAME} ${ST_TST_SRC} ${UTIL_SRC} ${KERN_SRC} )
+target_include_directories ( ${ST_EXE_NAME} PRIVATE ${TEST_DIR} ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH} )
+target_link_libraries ( ${ST_EXE_NAME} ${ROCPROFILER_TARGET} ${HSA_RUNTIME_LIB} ${HSA_KMT_LIB} c stdc++ dl pthread rt )
+
+## Building standalone intercept test executable
+add_executable ( ${STIN_EXE_NAME} ${STIN_TST_SRC} ${UTIL_SRC} ${KERN_SRC} )
+target_include_directories ( ${STIN_EXE_NAME} PRIVATE ${TEST_DIR} ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH} )
+target_link_libraries ( ${STIN_EXE_NAME} ${ROCPROFILER_TARGET} ${HSA_RUNTIME_LIB} ${HSA_KMT_LIB} c stdc++ dl pthread rt )
 
 ## Building intercept test executable
-add_library ( ${INEXE_NAME} SHARED ${INTST_SRC} ${UTIL_SRC} ${KERN_SRC} )
-target_include_directories ( ${INEXE_NAME} PRIVATE ${TEST_DIR} ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH} )
-target_link_libraries ( ${INEXE_NAME} ${ROCPROFILER_TARGET} ${HSA_RUNTIME_LIB} ${HSA_KMT_LIB} c stdc++ dl pthread rt )
+add_library ( ${IN_EXE_NAME} SHARED ${IN_TST_SRC} ${UTIL_SRC} ${KERN_SRC} )
+target_include_directories ( ${IN_EXE_NAME} PRIVATE ${TEST_DIR} ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH} )
+target_link_libraries ( ${IN_EXE_NAME} ${ROCPROFILER_TARGET} ${HSA_RUNTIME_LIB} ${HSA_KMT_LIB} c stdc++ dl pthread rt )
 
 ## Building ctrl test executable
 add_executable ( ${EXE_NAME} ${CTRL_SRC} ${UTIL_SRC} ${KERN_SRC} )
-target_include_directories ( ${EXE_NAME} PRIVATE ${TEST_DIR} ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH} )
+target_include_directories ( ${EXE_NAME} PRIVATE ${TEST_DIR} ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH} ${HSA_RUNTIME_LIB_PATH}/../include )
 target_link_libraries ( ${EXE_NAME} ${HSA_RUNTIME_LIB} ${HSA_KMT_LIB} c stdc++ dl pthread rt )
 execute_process ( COMMAND sh -xc "cp ${TEST_DIR}/run.sh ${PROJECT_BINARY_DIR}" )
 execute_process ( COMMAND sh -xc "cp ${TEST_DIR}/tool/*.xml ${PROJECT_BINARY_DIR}" )
@@ -93,5 +108,11 @@ add_library ( ${TEST_LIB} SHARED ${TEST_LIB_SRC} )
 target_include_directories ( ${TEST_LIB} PRIVATE ${TEST_DIR} ${ROOT_DIR} ${HSA_RUNTIME_INC_PATH} )
 target_link_libraries ( ${TEST_LIB} ${ROCPROFILER_TARGET} ${HSA_RUNTIME_LIB} c stdc++ dl pthread rt )
 
+## Build memory test bench
+add_custom_target( mbench
+  COMMAND sh -xc "cp -r ${TEST_DIR}/memory_validation ${PROJECT_BINARY_DIR}/test/."
+  COMMAND make -C "${PROJECT_BINARY_DIR}/test/memory_validation"
+)
+
 ## Copy OCL test
-execute_process ( COMMAND sh -xc "cp -r ${TEST_DIR}/ocl ${PROJECT_BINARY_DIR}/test" )
+execute_process ( COMMAND sh -xc "cp -r ${TEST_DIR}/ocl ${PROJECT_BINARY_DIR}/test/." )

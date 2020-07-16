@@ -25,6 +25,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #ifndef SRC_UTIL_HSA_RSRC_FACTORY_H_
 #define SRC_UTIL_HSA_RSRC_FACTORY_H_
 
+#define AMD_INTERNAL_BUILD
+
 #include <hsa.h>
 #include <hsa_api_trace.h>
 #include <hsa_ext_amd.h>
@@ -95,6 +97,7 @@ struct hsa_pfn_t {
   decltype(hsa_executable_create_alt)* hsa_executable_create_alt;
   decltype(hsa_executable_load_agent_code_object)* hsa_executable_load_agent_code_object;
   decltype(hsa_executable_freeze)* hsa_executable_freeze;
+  decltype(hsa_executable_destroy)* hsa_executable_destroy;
   decltype(hsa_executable_get_symbol)* hsa_executable_get_symbol;
   decltype(hsa_executable_symbol_get_info)* hsa_executable_symbol_get_info;
   decltype(hsa_executable_iterate_symbols)* hsa_executable_iterate_symbols;
@@ -164,10 +167,11 @@ struct AgentInfo {
   // Number of Shader Arrays Per Shader Engines in Gpu
   uint32_t shader_arrays_per_se;
 
-  // SGPR/VGPR block sizes
+  // SGPR/VGPR/LDS block sizes
   uint32_t sgpr_block_dflt;
   uint32_t sgpr_block_size;
   uint32_t vgpr_block_size;
+  static const uint32_t lds_block_size = 128 * 4;
 };
 
 // HSA timer class
@@ -180,7 +184,10 @@ class HsaTimer {
 
   enum time_id_t {
     TIME_ID_CLOCK_REALTIME = 0,
-    TIME_ID_CLOCK_MONOTONIC = 1,
+    TIME_ID_CLOCK_REALTIME_COARSE = 1,
+    TIME_ID_CLOCK_MONOTONIC = 2,
+    TIME_ID_CLOCK_MONOTONIC_COARSE = 3,
+    TIME_ID_CLOCK_MONOTONIC_RAW = 4,
     TIME_ID_NUMBER
   };
 
@@ -200,7 +207,7 @@ class HsaTimer {
   }
 
   // Method for timespec/ns conversion
-  timestamp_t timespec_to_ns(const timespec& time) const {
+  static timestamp_t timespec_to_ns(const timespec& time) {
     return ((timestamp_t)time.tv_sec * 1000000000) + time.tv_nsec;
   }
 
@@ -224,12 +231,21 @@ class HsaTimer {
   void correlated_pair_ns(time_id_t time_id, uint32_t iters,
                           timestamp_t* timestamp_v, timestamp_t* time_v, timestamp_t* error_v) {
     clockid_t clock_id = 0;
-    switch (clock_id) {
+    switch (time_id) {
       case TIME_ID_CLOCK_REALTIME:
         clock_id = CLOCK_REALTIME;
         break;
+      case TIME_ID_CLOCK_REALTIME_COARSE:
+        clock_id = CLOCK_REALTIME_COARSE;
+        break;
       case TIME_ID_CLOCK_MONOTONIC:
         clock_id = CLOCK_MONOTONIC;
+        break;
+      case TIME_ID_CLOCK_MONOTONIC_COARSE:
+        clock_id = CLOCK_MONOTONIC_COARSE;
+        break;
+      case TIME_ID_CLOCK_MONOTONIC_RAW:
+        clock_id = CLOCK_MONOTONIC_RAW;
         break;
       default:
         CHECK_STATUS("internal error: invalid time_id", HSA_STATUS_ERROR);
@@ -361,7 +377,7 @@ class HsaRsrcFactory {
   uint8_t* AllocateCmdMemory(const AgentInfo* agent_info, size_t size);
 
   // Wait signal
-  void SignalWait(const hsa_signal_t& signal) const;
+  hsa_signal_value_t SignalWait(const hsa_signal_t& signal, const hsa_signal_value_t& signal_value) const;
 
   // Wait signal with signal value restore
   void SignalWaitRestore(const hsa_signal_t& signal, const hsa_signal_value_t& signal_value) const;
@@ -393,7 +409,7 @@ class HsaRsrcFactory {
   // Enable executables loading tracking
   static bool IsExecutableTracking() { return executable_tracking_on_; }
   static void EnableExecutableTracking(HsaApiTable* table);
-  static const char* GetKernelName(uint64_t addr);
+  static const char* GetKernelNameRef(uint64_t addr);
 
   // Initialize HSA API table
   void static InitHsaApiTable(HsaApiTable* table);
@@ -428,9 +444,14 @@ class HsaRsrcFactory {
     time_error_[time_id] = error_v;
   }
 
-  hsa_status_t GetTime(uint32_t time_id, uint64_t value, uint64_t* time) {
+  hsa_status_t GetTimeVal(uint32_t time_id, uint64_t time_stamp, uint64_t* time_value) {
     if (time_id >= HsaTimer::TIME_ID_NUMBER) return HSA_STATUS_ERROR;
-    *time = value + time_shift_[time_id];
+    *time_value = time_stamp + time_shift_[time_id];
+    return HSA_STATUS_SUCCESS;
+  }
+
+  hsa_status_t GetTimeErr(uint32_t time_id, uint64_t* err) {
+    *err = time_error_[time_id];
     return HSA_STATUS_SUCCESS;
   }
 
@@ -478,7 +499,9 @@ class HsaRsrcFactory {
   typedef std::map<uint64_t, const char*> symbols_map_t;
   static symbols_map_t* symbols_map_;
   static bool executable_tracking_on_;
+  static void* to_dump_code_obj_;
   static hsa_status_t hsa_executable_freeze_interceptor(hsa_executable_t executable, const char *options);
+  static hsa_status_t hsa_executable_destroy_interceptor(hsa_executable_t executable);
   static hsa_status_t executable_symbols_cb(hsa_executable_t exec, hsa_executable_symbol_t symbol, void *data);
 
   // HSA runtime API table

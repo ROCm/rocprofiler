@@ -44,9 +44,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <vector>
 
-#include "util/exception.h"
-#include "util/logger.h"
-
 namespace rocprofiler {
 namespace util {
 
@@ -152,11 +149,15 @@ HsaRsrcFactory::HsaRsrcFactory(bool initialize_hsa) : initialize_hsa_(initialize
 
   // Time correlation
   const uint32_t corr_iters = 1000;
-  CorrelateTime(HsaTimer::TIME_ID_CLOCK_REALTIME, corr_iters);
-  CorrelateTime(HsaTimer::TIME_ID_CLOCK_MONOTONIC, corr_iters);
+  for (unsigned time_id = 0; time_id < HsaTimer::TIME_ID_NUMBER; time_id += 1) {
+    CorrelateTime((HsaTimer::time_id_t)time_id, corr_iters);
+  }
 
   // System timeout
   timeout_ = (timeout_ns_ == HsaTimer::TIMESTAMP_MAX) ? timeout_ns_ : timer_->ns_to_sysclock(timeout_ns_);
+
+  // To dump code objects
+  to_dump_code_obj_ = getenv("ROCP_DUMP_CODEOBJ");
 }
 
 // Destructor of the class
@@ -197,6 +198,7 @@ void HsaRsrcFactory::InitHsaApiTable(HsaApiTable* table) {
       hsa_api_.hsa_executable_create_alt = table->core_->hsa_executable_create_alt_fn;
       hsa_api_.hsa_executable_load_agent_code_object = table->core_->hsa_executable_load_agent_code_object_fn;
       hsa_api_.hsa_executable_freeze = table->core_->hsa_executable_freeze_fn;
+      hsa_api_.hsa_executable_destroy = table->core_->hsa_executable_destroy_fn;
       hsa_api_.hsa_executable_get_symbol = table->core_->hsa_executable_get_symbol_fn;
       hsa_api_.hsa_executable_symbol_get_info = table->core_->hsa_executable_symbol_get_info_fn;
       hsa_api_.hsa_executable_iterate_symbols = table->core_->hsa_executable_iterate_symbols_fn;
@@ -237,6 +239,7 @@ void HsaRsrcFactory::InitHsaApiTable(HsaApiTable* table) {
       hsa_api_.hsa_executable_create_alt = hsa_executable_create_alt;
       hsa_api_.hsa_executable_load_agent_code_object = hsa_executable_load_agent_code_object;
       hsa_api_.hsa_executable_freeze = hsa_executable_freeze;
+      hsa_api_.hsa_executable_destroy = hsa_executable_destroy;
       hsa_api_.hsa_executable_get_symbol = hsa_executable_get_symbol;
       hsa_api_.hsa_executable_symbol_get_info = hsa_executable_symbol_get_info;
       hsa_api_.hsa_executable_iterate_symbols = hsa_executable_iterate_symbols;
@@ -523,22 +526,25 @@ uint8_t* HsaRsrcFactory::AllocateCmdMemory(const AgentInfo* agent_info, size_t s
 }
 
 // Wait signal
-void HsaRsrcFactory::SignalWait(const hsa_signal_t& signal) const {
+hsa_signal_value_t HsaRsrcFactory::SignalWait(const hsa_signal_t& signal, const hsa_signal_value_t& signal_value) const {
+  const hsa_signal_value_t exp_value = signal_value - 1;
+  hsa_signal_value_t ret_value = signal_value;
   while (1) {
-    const hsa_signal_value_t signal_value =
-      hsa_api_.hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, 1, timeout_, HSA_WAIT_STATE_BLOCKED);
-    if (signal_value == 0) {
-      break;
-    } else {
-      if (signal_value == 1) WARN_LOGGING("signal waiting...");
-      else EXC_RAISING(HSA_STATUS_ERROR, "hsa_signal_wait_scacquire (" << signal_value << ")");
+    ret_value =
+      hsa_api_.hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, signal_value, timeout_, HSA_WAIT_STATE_BLOCKED);
+    if (ret_value == exp_value) break;
+    if (ret_value != signal_value) {
+      std::cerr << "Error: HsaRsrcFactory::SignalWait: signal_value(" << signal_value
+                << "), ret_value(" << ret_value << ")" << std::endl << std::flush;
+      abort();
     }
   }
+  return ret_value;
 }
 
 // Wait signal with signal value restore
 void HsaRsrcFactory::SignalWaitRestore(const hsa_signal_t& signal, const hsa_signal_value_t& signal_value) const {
-  SignalWait(signal);
+  SignalWait(signal, signal_value);
   hsa_api_.hsa_signal_store_relaxed(const_cast<hsa_signal_t&>(signal), signal_value);
 }
 
@@ -551,7 +557,7 @@ bool HsaRsrcFactory::Memcpy(const hsa_agent_t& agent, void* dst, const void* src
     CHECK_STATUS("hsa_signal_create()", status);
     status = hsa_api_.hsa_amd_memory_async_copy(dst, cpu_agents_[0], src, agent, size, 0, NULL, s);
     CHECK_STATUS("hsa_amd_memory_async_copy()", status);
-    SignalWait(s);
+    SignalWait(s, 1);
     status = hsa_api_.hsa_signal_destroy(s);
     CHECK_STATUS("hsa_signal_destroy()", status);
   }
@@ -695,20 +701,21 @@ uint64_t HsaRsrcFactory::Submit(hsa_queue_t* queue, const void* packet, size_t s
   return write_idx;
 }
 
-const char* HsaRsrcFactory::GetKernelName(uint64_t addr) {
+const char* HsaRsrcFactory::GetKernelNameRef(uint64_t addr) {
   std::lock_guard<mutex_t> lck(mutex_);
   const auto it = symbols_map_->find(addr);
   if (it == symbols_map_->end()) {
     fprintf(stderr, "HsaRsrcFactory::kernel addr (0x%lx) is not found\n", addr);
     abort();
   }
-  return strdup(it->second);
+  return it->second;
 }
 
 void HsaRsrcFactory::EnableExecutableTracking(HsaApiTable* table) {
   std::lock_guard<mutex_t> lck(mutex_);
   executable_tracking_on_ = true;
   table->core_->hsa_executable_freeze_fn = hsa_executable_freeze_interceptor;
+  table->core_->hsa_executable_destroy_fn = hsa_executable_destroy_interceptor;
 }
 
 hsa_status_t HsaRsrcFactory::executable_symbols_cb(hsa_executable_t exec, hsa_executable_symbol_t symbol, void *data) {
@@ -726,10 +733,14 @@ hsa_status_t HsaRsrcFactory::executable_symbols_cb(hsa_executable_t exec, hsa_ex
     status = hsa_api_.hsa_executable_symbol_get_info(symbol, HSA_EXECUTABLE_SYMBOL_INFO_NAME, name);
     CHECK_STATUS("Error in getting kernel name", status);
     name[len] = 0;
-    auto ret = symbols_map_->insert({addr, name});
-    if (ret.second == false) {
-      delete[] ret.first->second;
-      ret.first->second = name;
+    if (data == NULL) {
+      auto ret = symbols_map_->insert({addr, name});
+      if (ret.second == false) {
+        delete[] ret.first->second;
+        ret.first->second = name;
+      }
+    } else {
+      symbols_map_->erase(addr);
     }
   }
   return HSA_STATUS_SUCCESS;
@@ -740,7 +751,16 @@ hsa_status_t HsaRsrcFactory::hsa_executable_freeze_interceptor(hsa_executable_t 
   if (symbols_map_ == NULL) symbols_map_ = new symbols_map_t;
   hsa_status_t status = hsa_api_.hsa_executable_iterate_symbols(executable, executable_symbols_cb, NULL);
   CHECK_STATUS("Error in iterating executable symbols", status);
-  return hsa_api_.hsa_executable_freeze(executable, options);;
+  return hsa_api_.hsa_executable_freeze(executable, options);
+}
+
+hsa_status_t HsaRsrcFactory::hsa_executable_destroy_interceptor(hsa_executable_t executable) {
+  std::lock_guard<mutex_t> lck(mutex_);
+  if (symbols_map_ != NULL) {
+    hsa_status_t status = hsa_api_.hsa_executable_iterate_symbols(executable, executable_symbols_cb, (void*)1);
+    CHECK_STATUS("Error in iterating executable symbols", status);
+  }
+  return hsa_api_.hsa_executable_destroy(executable);
 }
 
 std::atomic<HsaRsrcFactory*> HsaRsrcFactory::instance_{};
@@ -749,6 +769,7 @@ HsaRsrcFactory::timestamp_t HsaRsrcFactory::timeout_ns_ = HsaTimer::TIMESTAMP_MA
 hsa_pfn_t HsaRsrcFactory::hsa_api_{};
 bool HsaRsrcFactory::executable_tracking_on_ = false;
 HsaRsrcFactory::symbols_map_t* HsaRsrcFactory::symbols_map_ = NULL;
+void* HsaRsrcFactory::to_dump_code_obj_ = NULL;
 
 }  // namespace util
 }  // namespace rocprofiler

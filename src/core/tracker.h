@@ -138,7 +138,7 @@ class Tracker {
     // Debug trace
     if (trace_on_) {
       auto outstanding = outstanding_.fetch_add(1);
-      fprintf(stdout, "Tracker::Add: entry %p, record %p, outst %lu\n", entry, entry->record, outstanding);
+      fprintf(stdout, "Tracker::Enable: entry %p, record %p, outst %lu\n", entry, entry->record, outstanding);
       fflush(stdout);
     }
   }
@@ -163,11 +163,21 @@ class Tracker {
   {}
 
   ~Tracker() {
+    if (trace_on_) {
+      fprintf(stdout, "Tracker::DESTR: sig list %d, outst %lu\n", (int)(sig_list_.size()), outstanding_.load());
+      fflush(stdout);
+    }
+
     auto it = sig_list_.begin();
     auto end = sig_list_.end();
     while (it != end) {
       auto cur = it++;
-      hsa_rsrc_->SignalWait((*cur)->signal);
+// The wait should be optiona as there possible some inter kernel dependencies and it possible to wait for
+// the kernels will never be lunched as the application was finished by some reason.
+#if 0
+      // FIXME: currently the signal value for tracking signals are taken from original application signal
+      hsa_rsrc_->SignalWait((*cur)->signal, 1);
+#endif
       Erase(cur);
     }
   }
@@ -182,7 +192,7 @@ class Tracker {
     // Debug trace
     if (trace_on_) {
       auto outstanding = outstanding_.fetch_sub(1);
-      fprintf(stdout, "Tracker::Handler: entry %p, record %p, outst %lu\n", entry, entry->record, outstanding);
+      fprintf(stdout, "Tracker::Complete: entry %p, record %p, outst %lu\n", entry, entry->record, outstanding);
       fflush(stdout);
     }
 
