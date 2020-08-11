@@ -157,8 +157,8 @@ class SQLiteDB:
           from_ts = from_us_list[ind] - start_us
           to_ts = to_us_dict[corr_id] - start_us
           if from_ts > to_ts: from_ts = to_ts
-          fd.write(',{"ts":%d,"ph":"s","cat":"DataFlow","id":%d,"pid":%s,"tid":%s,"name":"dep"}\n' % (from_ts, dep_id, str(from_pid), from_tid[ind]))
-          fd.write(',{"ts":%d,"ph":"t","cat":"DataFlow","id":%d,"pid":%s,"tid":0,"name":"dep"}\n' % (to_ts, dep_id, str(to_pid)))
+          fd.write(',{"ts":%.3f,"ph":"s","cat":"DataFlow","id":%d,"pid":%s,"tid":%s,"name":"dep"}\n' % (from_ts, dep_id, str(from_pid), from_tid[ind]))
+          fd.write(',{"ts":%.3f,"ph":"t","cat":"DataFlow","id":%d,"pid":%s,"tid":0,"name":"dep"}\n' % (to_ts, dep_id, str(to_pid)))
           dep_id += 1
 
   def metadata_json(self, jsonfile, sysinfo_file):
