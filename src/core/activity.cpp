@@ -55,92 +55,6 @@ void check_status(hsa_status_t status) {
   }
 }
 
-// Activity primitives
-namespace activity_prim {
-// PC sampling callback data
-struct pcsmp_callback_data_t {
-  const char* kernel_name;     // sampled kernel name
-  void* data_buffer;           // host buffer for tracing data
-  uint64_t id;                 // sample id
-  uint64_t cycle;              // sample cycle
-  uint64_t pc;                 // sample PC
-};
-
-uint32_t activity_op = UINT32_MAX;
-void* activity_arg = NULL;
-std::atomic<activity_async_callback_t> activity_callback{NULL};
-rocprofiler_t* context = NULL;
-
-hsa_status_t trace_data_cb(hsa_ven_amd_aqlprofile_info_type_t info_type,
-                           hsa_ven_amd_aqlprofile_info_data_t* info_data,
-                           void* data) {
-  const pcsmp_callback_data_t* pcsmp_data = (pcsmp_callback_data_t*) data;
-
-  activity_record_t record{};
-  record.op = activity_op;
-  record.pc_sample.se = pcsmp_data->id;
-  record.pc_sample.cycle = pcsmp_data->cycle;
-  record.pc_sample.pc = pcsmp_data->pc;
-  activity_async_callback_t fun = activity_callback.load(std::memory_order_acquire);
-  if (fun) {
-    (fun)(activity_op, &record, activity_arg);
-  } else {
-    free((void*)(pcsmp_data->kernel_name));
-  }
-  return HSA_STATUS_SUCCESS;
-}
-
-bool context_handler(rocprofiler_group_t group, void* arg) {
-  hsa_agent_t agent{};
-  hsa_status_t status = rocprofiler_get_agent(group.context, &agent);
-  check_status(status);
-  const rocprofiler::util::AgentInfo* agent_info = rocprofiler::util::HsaRsrcFactory::Instance().GetAgentInfo(agent);
-
-  pcsmp_callback_data_t pcsmp_data{};
-  pcsmp_data.kernel_name = (const char*)arg;
-  pcsmp_data.data_buffer = rocprofiler::util::HsaRsrcFactory::Instance().AllocateSysMemory(agent_info, rocprofiler::TraceProfile::GetSize());
-  status = rocprofiler_iterate_trace_data(group.context, trace_data_cb, &pcsmp_data);
-  check_status(status);
-  return false;
-}
-
-// Kernel disoatch callback
-hsa_status_t dispatch_callback(const rocprofiler_callback_data_t* callback_data, void* user_data,
-                               rocprofiler_group_t* group) {
-  // context features
-  const rocprofiler_feature_kind_t trace_kind =
-    (rocprofiler_feature_kind_t)(ROCPROFILER_FEATURE_KIND_TRACE | ROCPROFILER_FEATURE_KIND_PCSMP_MOD);
-  const uint32_t feature_count = 1;
-  const uint32_t parameter_count = 1;
-  rocprofiler_feature_t* features = new rocprofiler_feature_t[feature_count];
-  memset(features, 0, feature_count * sizeof(rocprofiler_feature_t));
-  rocprofiler_parameter_t* parameters = new rocprofiler_parameter_t[parameter_count];
-  memset(features, 0, parameter_count * sizeof(rocprofiler_parameter_t));
-  parameters[0].parameter_name = HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_COMPUTE_UNIT_TARGET;
-  parameters[0].value = 0;
-
-  features[0].kind = trace_kind;
-  features[0].parameters = parameters;
-  features[0].parameter_count = parameter_count;
-
-  // context properties
-  rocprofiler_properties_t properties{};
-  properties.handler = context_handler;
-  properties.handler_arg = (void*)strdup(callback_data->kernel_name);
-
-  // Open profiling context
-  hsa_status_t status = rocprofiler_open(callback_data->agent, features, feature_count,
-                                         &context, 0 /*ROCPROFILER_MODE_SINGLEGROUP*/, &properties);
-  check_status(status);
-
-  // Get group[0]
-  status = rocprofiler_get_group(context, 0, group);
-  check_status(status);
-
-  return status;
-}
-} // namespace activity_prim
-
 extern "C" {
 PUBLIC_API const char* GetOpName(uint32_t op) { return strdup("PCSAMPLE"); }
 
@@ -149,23 +63,10 @@ PUBLIC_API bool RegisterApiCallback(uint32_t op, void* callback, void* arg) { re
 PUBLIC_API bool RemoveApiCallback(uint32_t op) { return true; }
 
 PUBLIC_API bool InitActivityCallback(void* callback, void* arg) {
-  activity_prim::activity_arg = arg;
-  activity_prim::activity_callback.store((activity_async_callback_t)callback, std::memory_order_release);
-
-  rocprofiler_queue_callbacks_t queue_callbacks{};
-  queue_callbacks.dispatch = activity_prim::dispatch_callback;
-  rocprofiler_set_queue_callbacks(queue_callbacks, NULL);
-
   return true;
 }
 
 PUBLIC_API bool EnableActivityCallback(uint32_t op, bool enable) {
-  if (enable) {
-    activity_prim::activity_op = op;
-    rocprofiler_start_queue_callbacks();
-  } else {
-    rocprofiler_stop_queue_callbacks();
-  }
   return true;
 }
 }  // extern "C"

@@ -83,7 +83,6 @@ class Group {
 
   Group(const util::AgentInfo* agent_info, Context* context, const uint32_t& index)
       : pmc_profile_(agent_info),
-        trace_profile_(agent_info),
         n_profiles_(0),
         refs_(1),
         context_(context),
@@ -96,32 +95,23 @@ class Group {
       case ROCPROFILER_FEATURE_KIND_METRIC:
         pmc_profile_.Insert(info);
         break;
-      case ROCPROFILER_FEATURE_KIND_TRACE:
-        trace_profile_.Insert(info);
-        break;
       default:
         EXC_RAISING(HSA_STATUS_ERROR, "bad rocprofiler feature kind (" << kind << ")");
     }
   }
 
-  hsa_status_t Finalize() {
-    hsa_status_t status = pmc_profile_.Finalize(start_vector_, stop_vector_, read_vector_);
-    if (status == HSA_STATUS_SUCCESS) {
-      status = trace_profile_.Finalize(start_vector_, stop_vector_, read_vector_);
-    }
+  hsa_status_t Finalize(const bool is_concurrent = false) {
+    hsa_status_t status = pmc_profile_.Finalize(start_vector_, stop_vector_,
+            read_vector_, is_concurrent);
     if (status == HSA_STATUS_SUCCESS) {
       if (!pmc_profile_.Empty()) ++n_profiles_;
-      if (!trace_profile_.Empty()) ++n_profiles_;
     }
     return status;
   }
 
   void GetProfiles(profile_vector_t& vec) {
     pmc_profile_.GetProfiles(vec);
-    trace_profile_.GetProfiles(vec);
   }
-
-  void GetTraceProfiles(profile_vector_t& vec) { trace_profile_.GetProfiles(vec); }
 
   info_vector_t& GetInfoVector() { return info_vector_; }
   const pkt_vector_t& GetStartVector() const { return start_vector_; }
@@ -137,7 +127,6 @@ class Group {
 
  private:
   PmcProfile pmc_profile_;
-  TraceProfile trace_profile_;
   info_vector_t info_vector_;
   pkt_vector_t start_vector_;
   pkt_vector_t stop_vector_;
@@ -183,7 +172,7 @@ class Context {
 
   uint32_t GetGroupCount() const { return set_.size(); }
 
-  inline rocprofiler_group_t GetGroupInfo(Group* g) {
+  inline rocprofiler_group_t GetGroupDescr(Group* g) {
     rocprofiler::info_vector_t& info_vector = g->GetInfoVector();
     rocprofiler_group_t group = {};
     group.index = g->GetIndex();
@@ -192,12 +181,12 @@ class Context {
     group.feature_count = info_vector.size();
     return group;
   }
-  inline rocprofiler_group_t GetGroupInfo(const uint32_t& index) {
+  inline rocprofiler_group_t GetGroupDescr(const uint32_t& index) {
     rocprofiler_group_t group = {};
     if (set_.empty()) {
       group.context = reinterpret_cast<rocprofiler_t*>(this);
     } else {
-      group = GetGroupInfo(&set_[index]);
+      group = GetGroupDescr(&set_[index]);
     }
     return group;
   }
@@ -272,15 +261,28 @@ class Context {
     }
   }
 
-  void IterateTraceData(rocprofiler_trace_data_callback_t callback, void* data) {
-    profile_vector_t profile_vector;
-    set_[0].GetTraceProfiles(profile_vector);
+  /* Handle the completion of kernel-begin 'read' packet */
+  static bool HandlerRead(hsa_signal_value_t value, void* arg) {
+    Group* group = reinterpret_cast<Group*>(arg);
+    Context* context = group->GetContext();
+
+    // Handle the completion signal of read packet at kernel begin
+    const profile_vector_t profile_vector = context->GetProfiles(group->GetIndex());
     for (auto& tuple : profile_vector) {
-      if (pcsmp_mode_) const_cast<profile_t*>(tuple.profile)->event_count = UINT32_MAX;
-      const hsa_status_t status =
-          api_->hsa_ven_amd_aqlprofile_iterate_data(tuple.profile, callback, data);
-      if (status != HSA_STATUS_SUCCESS) AQL_EXC_RAISING(status, "context iterate data failed");
+      // Wait for read packet to complete
+      util::HsaRsrcFactory::Instance().SignalWaitRestore(tuple.completion_signal, 1);
+      const profile_t* profile = tuple.profile;
+      // Copy the counter values, read at kernel begin, to the right half of
+      // the buffer, so that the next kernel-end read can reuse the left half
+      char* data = reinterpret_cast<char*>(profile->output_buffer.ptr);
+      const uint32_t num = profile->output_buffer.size / 2;
+      for(uint32_t i = 0; i < num; ++i) {
+        data[i+num] = data[i];          // left --> right
+        data[i] = 0;                    // reset left
+      }
     }
+
+    return false;
   }
 
   static bool Handler(hsa_signal_value_t value, void* arg) {
@@ -288,8 +290,8 @@ class Context {
     Context* context = group->GetContext();
     auto r = group->FetchDecrRefsCount();
     if (r == 1) {
-      const rocprofiler_group_t group_info = context->GetGroupInfo(group);
-      context->handler_(group_info, context->handler_arg_);
+      const rocprofiler_group_t group_descr = context->GetGroupDescr(group);
+      context->handler_(group_descr, context->handler_arg_);
     }
     return false;
   }
@@ -297,6 +299,25 @@ class Context {
   hsa_agent_t GetAgent() const { return agent_; }
   Group* GetGroup(const uint32_t& index) { return &set_[index]; }
   rocprofiler_handler_t GetHandler(void** arg) const { *arg = handler_arg_; return handler_; }
+
+  void SetDispatchSignal(const hsa_signal_t &signal) {
+    dispatch_signal_ = signal;
+  }
+  hsa_signal_t& GetDispatchSignal() {
+    return dispatch_signal_;
+  }
+  void SetOrigSignal(const hsa_signal_t &signal) {
+    orig_signal_ = signal;
+  }
+  const hsa_signal_t& GetOrigSignal() const {
+    return orig_signal_;
+  }
+  rocprofiler_dispatch_record_t* GetRecord() {
+    return &record_;
+  }
+
+  // Concurrent profiling mode
+  static bool k_concurrent_;
 
  private:
   Context(const util::AgentInfo* agent_info, Queue* queue, rocprofiler_feature_t* info,
@@ -309,12 +330,16 @@ class Context {
         metrics_(NULL),
         handler_(handler),
         handler_arg_(handler_arg),
-        pcsmp_mode_(false)
+        pcsmp_mode_(false),
+        dispatch_signal_{},
+        orig_signal_{},
+        record_{}
   {}
 
   ~Context() { Destruct(); }
 
   void Destruct() {
+    hsa_signal_destroy(dispatch_signal_);
     for (const auto& v : info_map_) {
       const std::string& name = v.first;
       const rocprofiler_feature_t* info = v.second;
@@ -349,12 +374,20 @@ class Context {
         set_[group_index].ResetRefsCount();
         const profile_vector_t profile_vector = GetProfiles(group_index);
         for (auto& tuple : profile_vector) {
+          // Handler for read packet completion
+          if (k_concurrent_) {
+            hsa_amd_signal_async_handler(tuple.completion_signal, HSA_SIGNAL_CONDITION_LT, 1, HandlerRead,
+                                       &set_[group_index]);
+          }
           // Handler for stop packet completion
           hsa_amd_signal_async_handler(tuple.completion_signal, HSA_SIGNAL_CONDITION_LT, 1, Handler,
                                        &set_[group_index]);
         }
       }
     }
+
+    hsa_status_t status = hsa_signal_create(1, 0, NULL, &dispatch_signal_);
+    if (status != HSA_STATUS_SUCCESS) EXC_RAISING(status, "MetricsDict create failed");
   }
 
   // Initialize rocprofiler context
@@ -437,23 +470,6 @@ class Context {
           const uint32_t group_index = block_status.group_index;
           set_[group_index].Insert(profile_info_t{event, NULL, 0, info});
         }
-      } else if (kind & ROCPROFILER_FEATURE_KIND_TRACE) {  // Processing traces features
-        info->kind = ROCPROFILER_FEATURE_KIND_TRACE;
-
-        const event_t* event = NULL;
-        if (kind & ROCPROFILER_FEATURE_KIND_PCSMP_MOD) { // PC sampling
-          pcsmp_mode_ = true;
-        } else if (kind & ROCPROFILER_FEATURE_KIND_SPM_MOD) { // SPM trace
-          const Metric* metric = metrics_->Get(name);
-          if (metric == NULL)
-            EXC_RAISING(HSA_STATUS_ERROR, "input metric '" << name << "' is not found");
-          counters_vec_t counters_vec = metric->GetCounters();
-          if (counters_vec.size() != 1)
-            EXC_RAISING(HSA_STATUS_ERROR, "trace bad metric '" << name << "' is not base counter");
-          const counter_t* counter = counters_vec[0];
-          event = &(counter->event);
-        }
-        set_[0].Insert(profile_info_t{event, info->parameters, info->parameter_count, info});
       } else {
         EXC_RAISING(HSA_STATUS_ERROR, "bad rocprofiler feature kind (" << kind << ")");
       }
@@ -464,7 +480,7 @@ class Context {
 
   void Finalize() {
     for (unsigned index = 0; index < set_.size(); ++index) {
-      const hsa_status_t status = set_[index].Finalize();
+      const hsa_status_t status = set_[index].Finalize(k_concurrent_);
       if (status != HSA_STATUS_SUCCESS) EXC_RAISING(status, "context finalize failed");
     }
   }
@@ -502,56 +518,6 @@ class Context {
         if (ainfo_data->sample_id == 0) rinfo->data.result_int64 = 0;
         rinfo->data.result_int64 += ainfo_data->pmc_data.result;
         rinfo->data.kind = ROCPROFILER_DATA_KIND_INT64;
-      } else if (ainfo_type == HSA_VEN_AMD_AQLPROFILE_INFO_TRACE_DATA) {
-        if (rinfo->data.result_bytes.copy) {
-          const bool trace_local = TraceProfile::IsLocal();
-          util::HsaRsrcFactory* hsa_rsrc = &util::HsaRsrcFactory::Instance();
-          if (sample_id == 0) {
-              const uint32_t output_buffer_size = profile->output_buffer.size;
-              const uint32_t output_buffer_size64 = profile->output_buffer.size / sizeof(uint64_t);
-              const util::AgentInfo* agent_info = hsa_rsrc->GetAgentInfo(profile->agent);
-              void* ptr = (trace_local) ? hsa_rsrc->AllocateSysMemory(agent_info, output_buffer_size) :
-                                         calloc(output_buffer_size64, sizeof(uint64_t));
-              rinfo->data.result_bytes.size = output_buffer_size;
-              rinfo->data.result_bytes.ptr = ptr;
-              callback_data->ptr = reinterpret_cast<char*>(ptr);
-          }
-          char* result_bytes_ptr = reinterpret_cast<char*>(rinfo->data.result_bytes.ptr);
-          const char* end = result_bytes_ptr + rinfo->data.result_bytes.size;
-          const char* src = reinterpret_cast<char*>(ainfo_data->trace_data.ptr);
-          uint32_t size = ainfo_data->trace_data.size;
-          char* ptr = callback_data->ptr;
-          uint32_t* header = reinterpret_cast<uint32_t*>(ptr);
-          char* dest = ptr + sizeof(*header);
-
-          if ((dest + size) >= end) {
-            if (dest < end) size = end - dest;
-            else EXC_RAISING(HSA_STATUS_ERROR, "Trace data out of output buffer");
-          }
-
-          bool suc = true;
-          if (trace_local) {
-            suc = hsa_rsrc->Memcpy(profile->agent, dest, src, size);
-          } else {
-            memcpy(dest, src, size);
-          }
-          if (suc) {
-            *header = size;
-            callback_data->ptr = dest + align_size(size, sizeof(uint32_t));
-            rinfo->data.result_bytes.instance_count = sample_id + 1;
-            rinfo->data.kind = ROCPROFILER_DATA_KIND_BYTES;
-          } else
-            EXC_RAISING(HSA_STATUS_ERROR, "Agent Memcpy failed, dst(" << (void*)dest << ") src(" << (void*)src << ") size(" << size << ")");
-        } else {
-          if (sample_id == 0) {
-            rinfo->data.result_bytes.ptr = profile->output_buffer.ptr;
-            rinfo->data.result_bytes.size = profile->output_buffer.size;
-            rinfo->data.result_bytes.instance_count = UINT32_MAX;
-          }
-
-          rinfo->data.result_bytes.instance_count += 1;
-          rinfo->data.kind = ROCPROFILER_DATA_KIND_BYTES;
-        }
       } else {
         EXC_RAISING(HSA_STATUS_ERROR, "unknown data type = " << ainfo_type);
       }
@@ -593,7 +559,16 @@ class Context {
 
   // PC sampling mode
   bool pcsmp_mode_;
+
+  // kernel packet dispatch copmletion signal
+  hsa_signal_t dispatch_signal_;
+  hsa_signal_t orig_signal_;
+  rocprofiler_dispatch_record_t record_;
+
 };
+
+#define CONTEXT_INSTANTIATE() \
+  bool rocprofiler::Context::k_concurrent_ = false;
 
 }  // namespace rocprofiler
 

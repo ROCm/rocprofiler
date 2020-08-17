@@ -86,7 +86,7 @@ export HSA_TOOLS_LIB=librocprofiler64.so.1
 # enable intercepting mode in rocprofiler
 export ROCP_HSA_INTERCEPT=2
 # test macro for kernel iterations number
-export ROCP_KITER=100
+export ROCP_KITER=20
 # test macro for per-kernel dispatching number
 export ROCP_DITER=10
 eval_test "Standalone intercepting test" ./test/stand_intercept_test
@@ -95,8 +95,8 @@ unset ROCP_HSA_INTERCEPT
 ## Intercepting usage model test
 # tool library loaded by ROC profiler
 export ROCP_TOOL_LIB=./test/libintercept_test.so
-export ROCP_KITER=50
-export ROCP_DITER=50
+export ROCP_KITER=20
+export ROCP_DITER=20
 export ROCP_AGENTS=1
 export ROCP_THRS=3
 eval_test "Intercepting usage model test" ./test/ctrl
@@ -107,59 +107,56 @@ export ROCP_TOOL_LIB=libtool.so
 # ROC profiler kernels timing
 export ROCP_TIMESTAMP_ON=1
 # output directory for the tool library, for metrics results file 'results.txt'
-# and SQTT trace files 'thread_trace.se<n>.out'
 export ROCP_OUTPUT_DIR=./RESULTS
 
 if [ ! -e $ROCP_TOOL_LIB ] ; then
   export ROCP_TOOL_LIB=test/libtool.so
 fi
 
-export ROCP_KITER=50
-export ROCP_DITER=50
+export ROCP_KITER=20
+export ROCP_DITER=20
 export ROCP_AGENTS=1
 export ROCP_THRS=1
-export ROCP_INPUT=input.xml
-eval_test "'rocprof' libtool test" ./test/ctrl
+export ROCP_INPUT=pmc_input.xml
+eval_test "'rocprof' libtool PMC test" ./test/ctrl
 
-export ROCP_KITER=10
-export ROCP_DITER=10
+export ROCP_KITER=20
+export ROCP_DITER=20
 export ROCP_AGENTS=1
 export ROCP_THRS=10
-export ROCP_INPUT=input1.xml
-eval_test "'rocprof' libtool test n-threads" ./test/ctrl
+export ROCP_INPUT=pmc_input.xml
+eval_test "'rocprof' libtool PMC n-thread test" ./test/ctrl
 
-## SPM test
-# export ROCP_KITER=3
-# export ROCP_DITER=3
-# export ROCP_AGENTS=1
-# export ROCP_THRS=1
-# export ROCP_INPUT=spm_input.xml
-# export ROCP_SPM=1
-# eval_test "libtool test, SPM trace test" ./test/ctrl
-# unset ROCP_SPM
+export ROCP_OPT_MODE=1
+export ROCP_KITER=20
+export ROCP_DITER=20
+export ROCP_AGENTS=1
+export ROCP_THRS=10
+export ROCP_INPUT=pmc_input.xml
+eval_test "'rocprof' libtool PMC n-thread opt test" ./test/ctrl
+unset ROCP_OPT_MODE
+
+export ROCP_KITER=20
+export ROCP_DITER=20
+export ROCP_AGENTS=1
+export ROCP_THRS=1
+export ROCP_INPUT=pmc_input1.xml
+eval_test "'rocprof' libtool PMC test1" ./test/ctrl
+
+export ROCP_KITER=20
+export ROCP_DITER=20
+export ROCP_AGENTS=1
+export ROCP_THRS=10
+export ROCP_INPUT=pmc_input1.xml
+eval_test "'rocprof' libtool PMC n-thread test1" ./test/ctrl
 
 ## Libtool test, counter sets
-# Memcopies tracking
-export ROCP_MCOPY_TRACKING=1
-
-export ROCP_KITER=1
-export ROCP_DITER=4
-export ROCP_INPUT=input2.xml
-eval_test "libtool test, counter sets" ./test/ctrl
-
-## OpenCL test
-#export ROCP_OBJ_TRACKING=1
-#export ROCP_INPUT=input1.xml
-#eval_test "libtool test, OpenCL sample" ./test/ocl/SimpleConvolution
-
-# Memcopies tracking
-unset ROCP_MCOPY_TRACKING
 # enable HSA intercepting
 export ROCP_HSA_INTERC=1
 
 export ROCP_KITER=10
 export ROCP_DITER=10
-export ROCP_INPUT=input1.xml
+#export ROCP_INPUT=input1.xml
 eval_test "libtool test, counter sets" ./test/ctrl
 
 ## OpenCL test

@@ -72,6 +72,8 @@ typedef struct {
   uint64_t timeout;
   uint32_t timestamp_on;
   uint32_t hsa_intercepting;
+  uint32_t k_concurrent;
+  uint32_t opt_mode;
 } rocprofiler_settings_t;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -90,8 +92,6 @@ hsa_status_t rocprofiler_error_string(
 typedef enum {
   ROCPROFILER_FEATURE_KIND_METRIC = 0,
   ROCPROFILER_FEATURE_KIND_TRACE = 1,
-  ROCPROFILER_FEATURE_KIND_SPM_MOD = 2,
-  ROCPROFILER_FEATURE_KIND_PCSMP_MOD = 4
 } rocprofiler_feature_kind_t;
 
 // Profiling feture parameter
@@ -478,7 +478,8 @@ typedef enum {
   ROCPROFILER_HSA_CB_ID_ALLOCATE = 0, // Memory allocate callback
   ROCPROFILER_HSA_CB_ID_DEVICE = 1,   // Device assign callback
   ROCPROFILER_HSA_CB_ID_MEMCOPY = 2,  // Memcopy callback
-  ROCPROFILER_HSA_CB_ID_SUBMIT = 3    // Packet submit callback
+  ROCPROFILER_HSA_CB_ID_SUBMIT = 3,   // Packet submit callback
+  ROCPROFILER_HSA_CB_ID_KSYMBOL = 4   // Loading/unloading of kernel symbol
 } rocprofiler_hsa_cb_id_t;
 
 // HSA callback data type
@@ -509,6 +510,12 @@ typedef struct {
       uint32_t device_type;                           // type of device the packed is submitted to
       uint32_t device_id;                             // id of device the packed is submitted to
     } submit;
+    struct {
+      uint64_t object;                                // kernel symbol object
+      const char* name;                               // kernel symbol name
+      uint32_t name_length;                           // kernel symbol name length
+      int destroy;                                    // symbol executable destroy
+    } ksymbol;
   };
 } rocprofiler_hsa_callback_data_t;
 
@@ -524,6 +531,7 @@ typedef struct {
   rocprofiler_hsa_callback_fun_t device; // agent assign callback
   rocprofiler_hsa_callback_fun_t memcopy; // memory copy callback
   rocprofiler_hsa_callback_fun_t submit; // packet submit callback
+  rocprofiler_hsa_callback_fun_t ksymbol; // kernel symbol callback
 } rocprofiler_hsa_callbacks_t;
 
 // Set callbacks. If the callback is NULL then it is disabled.

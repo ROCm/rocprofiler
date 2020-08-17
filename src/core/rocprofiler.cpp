@@ -150,6 +150,20 @@ void RestoreHsaApi() {
   table->amd_ext_->hsa_amd_queue_intercept_register_fn = hsa_amd_queue_intercept_register_fn;
 }
 
+void PmcStarter(Context* context) {
+  hsa_agent_t agent = context->GetAgent();
+  // Create queue
+  hsa_queue_t* queue;
+  hsa_status_t status = rocprofiler::CreateQueuePro(agent, 1,
+    HSA_QUEUE_TYPE_MULTI, NULL, NULL, UINT32_MAX, UINT32_MAX, &queue);
+  if (status != HSA_STATUS_SUCCESS) EXC_RAISING(status, "CreateQueuePro");
+  HsaQueue hsa_queue(NULL, queue);
+  context->Start(0, &hsa_queue);
+  context->Read(0, &hsa_queue);
+  context->GetData(0);
+  hsa_queue_destroy(queue);
+}
+
 void StandaloneIntercept() {
   ::HsaApiTable* table = kHsaApiTable;
   table->core_->hsa_queue_create_fn = rocprofiler::CreateQueuePro;
@@ -199,8 +213,6 @@ uint32_t LoadTool() {
 
     rocprofiler_settings_t settings{};
     settings.intercept_mode = (intercept_mode != 0) ? 1 : 0;
-    settings.trace_size = TraceProfile::GetSize();
-    settings.trace_local = TraceProfile::IsLocal() ? 1: 0;
     settings.timeout = util::HsaRsrcFactory::GetTimeoutNs();
     settings.timestamp_on = InterceptQueue::IsTrackerOn() ? 1 : 0;
     settings.code_obj_tracking = 1;
@@ -208,14 +220,17 @@ uint32_t LoadTool() {
     if (handler) handler();
     else if (handler_prop) handler_prop(&settings);
 
-    TraceProfile::SetSize(settings.trace_size);
-    TraceProfile::SetLocal(settings.trace_local != 0);
     util::HsaRsrcFactory::SetTimeoutNs(settings.timeout);
     InterceptQueue::TrackerOn(settings.timestamp_on != 0);
     if (settings.intercept_mode != 0) intercept_mode = DISPATCH_INTERCEPT_MODE;
     if (settings.code_obj_tracking) intercept_mode |= CODE_OBJ_TRACKING_MODE;
     if (settings.memcopy_tracking) intercept_mode |= MEMCOPY_INTERCEPT_MODE;
     if (settings.hsa_intercepting) intercept_mode |= HSA_INTERCEPT_MODE;
+    if (settings.k_concurrent) {
+      Context::k_concurrent_ = settings.k_concurrent;
+      InterceptQueue::k_concurrent_ = settings.k_concurrent;
+    }
+    if (settings.opt_mode) InterceptQueue::opt_mode_ = true;
   }
 
   ONLOAD_TRACE("end intercept_mode(" << intercept_mode << ")");
@@ -418,14 +433,14 @@ hsa_status_t hsa_amd_memory_async_copy_rect_interceptor(
 }
 
 rocprofiler_properties_t rocprofiler_properties;
-uint32_t TraceProfile::output_buffer_size_ = 0x2000000;  // 32M
-bool TraceProfile::output_buffer_local_ = true;
 std::atomic<Tracker*> Tracker::instance_{};
 Tracker::mutex_t Tracker::glob_mutex_;
 Tracker::counter_t Tracker::counter_ = 0;
 util::Logger::mutex_t util::Logger::mutex_;
 std::atomic<util::Logger*> util::Logger::instance_{};
 }
+
+CONTEXT_INSTANTIATE();
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Public library methods
@@ -536,8 +551,7 @@ PUBLIC_API hsa_status_t rocprofiler_open(hsa_agent_t agent, rocprofiler_feature_
   if (mode != 0) {
     if (mode & ROCPROFILER_MODE_STANDALONE) {
       if (mode & ROCPROFILER_MODE_CREATEQUEUE) {
-        if (hsa_rsrc->CreateQueue(agent_info, properties->queue_depth, &(properties->queue)) ==
-            false) {
+        if (hsa_rsrc->CreateQueue(agent_info, properties->queue_depth, &(properties->queue)) == false) {
           EXC_RAISING(HSA_STATUS_ERROR, "CreateQueue() failed");
         }
       }
@@ -591,7 +605,7 @@ PUBLIC_API hsa_status_t rocprofiler_get_group(rocprofiler_t* handle, uint32_t gr
                                               rocprofiler_group_t* group) {
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
-  *group = context->GetGroupInfo(group_index);
+  *group = context->GetGroupDescr(group_index);
   API_METHOD_SUFFIX
 }
 
@@ -692,12 +706,7 @@ PUBLIC_API hsa_status_t rocprofiler_stop_queue_callbacks() {
 
 // Method for iterating the events output data
 PUBLIC_API hsa_status_t rocprofiler_iterate_trace_data(
-    rocprofiler_t* handle, hsa_ven_amd_aqlprofile_data_callback_t callback, void* data) {
-  API_METHOD_PREFIX
-  rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
-  context->IterateTraceData(callback, data);
-  API_METHOD_SUFFIX
-}
+    rocprofiler_t* handle, hsa_ven_amd_aqlprofile_data_callback_t callback, void* data) {}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Open profiling pool
