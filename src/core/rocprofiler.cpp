@@ -706,7 +706,9 @@ PUBLIC_API hsa_status_t rocprofiler_stop_queue_callbacks() {
 
 // Method for iterating the events output data
 PUBLIC_API hsa_status_t rocprofiler_iterate_trace_data(
-    rocprofiler_t* handle, hsa_ven_amd_aqlprofile_data_callback_t callback, void* data) {}
+    rocprofiler_t* handle, hsa_ven_amd_aqlprofile_data_callback_t callback, void* data) {
+  return HSA_STATUS_ERROR;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Open profiling pool
