@@ -499,7 +499,6 @@ class Context {
                                    hsa_ven_amd_aqlprofile_info_data_t* ainfo_data, void* data) {
     hsa_status_t status = HSA_STATUS_SUCCESS;
     callback_data_t* callback_data = reinterpret_cast<callback_data_t*>(data);
-    const profile_t* profile = callback_data->profile;
     info_vector_t& info_vector = *(callback_data->info_vector);
     uint32_t index = callback_data->index;
     const uint32_t sample_id = ainfo_data->sample_id;

@@ -334,7 +334,6 @@ void output_results(const context_entry_t* entry, const char* label) {
   FILE* file = entry->file_handle;
   const rocprofiler_feature_t* features = entry->features;
   const unsigned feature_count = entry->feature_count;
-  rocprofiler_t* context = entry->group.context;
 
   for (unsigned i = 0; i < feature_count; ++i) {
     const rocprofiler_feature_t* p = &features[i];
@@ -1088,7 +1087,6 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
 
   bool opt_mode_cond = ((features_found != 0) &&
                               (metrics_set->empty()) &&
-                              (traces_found == 0) &&
                               (filter_disabled == true));
   if (settings->opt_mode == 0) opt_mode_cond = false;
   if (!opt_mode_cond) settings->opt_mode = 0;
