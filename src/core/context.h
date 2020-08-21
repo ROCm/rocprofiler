@@ -330,7 +330,6 @@ class Context {
         metrics_(NULL),
         handler_(handler),
         handler_arg_(handler_arg),
-        pcsmp_mode_(false),
         dispatch_signal_{},
         orig_signal_{},
         record_{}
@@ -555,9 +554,6 @@ class Context {
   // Context completion handler
   rocprofiler_handler_t handler_;
   void* handler_arg_;
-
-  // PC sampling mode
-  bool pcsmp_mode_;
 
   // kernel packet dispatch copmletion signal
   hsa_signal_t dispatch_signal_;
