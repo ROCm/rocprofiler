@@ -227,4 +227,15 @@ class Logger {
   } while(0)
 #endif
 
+#if DEBUG_TRACE_ON
+inline static void DEBUG_TRACE(const char* fmt, ...) {
+  va_list valist;
+  va_start(valist, fmt);
+  vprintf(fmt, valist); fflush(stdout);
+  va_end(valist);
+}
+#else
+inline static void DEBUG_TRACE(const char* fmt, ...) {}
+#endif
+
 #endif  // SRC_UTIL_LOGGER_H_

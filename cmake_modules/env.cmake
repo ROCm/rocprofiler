@@ -64,8 +64,11 @@ if ( "$ENV{CXX}" STREQUAL "/usr/bin/clang++" )
 endif()
 
 ## Enable debug trace
+if ( DEFINED CMAKE_DEBUG_TRACE )
+  add_definitions ( -DDEBUG_TRACE_ON=1 )
+endif()
 if ( DEFINED ENV{CMAKE_DEBUG_TRACE} )
-  add_definitions ( -DDEBUG_TRACE=1 )
+  add_definitions ( -DDEBUG_TRACE_ON=1 )
 endif()
 
 ## Enable AQL-profile new API
