@@ -297,6 +297,18 @@ class Context {
       const hsa_status_t status =
           api_->hsa_ven_amd_aqlprofile_iterate_data(tuple.profile, DataCallback, &callback_data);
       if (status != HSA_STATUS_SUCCESS) AQL_EXC_RAISING(status, "context iterate data failed");
+
+      // Debug message
+#if DEBUG_TRACE_ON
+      DEBUG_TRACE("ContextData: context(%p) group(%u) features(%u)\n",
+        this, group_index, tuple.info_vector->size());
+      for (uint32_t ind = 0; ind < tuple.info_vector->size(); ++ind) {
+          rocprofiler_feature_t* rinfo = tuple.info_vector->at(ind);
+          DEBUG_TRACE(">> feature %u: context(%p) group(%u) %s(type(%d) kind=%d val=%lu)\n",
+            ind, this, group_index,
+            rinfo->name, (int)(rinfo->kind), (int)(rinfo->data.kind), rinfo->data.result_int64);
+      }
+#endif
     }
   }
 

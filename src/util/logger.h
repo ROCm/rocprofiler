@@ -100,10 +100,10 @@ class Logger {
     return *obj;
   }
 
- private:
   static uint32_t GetPid() { return syscall(__NR_getpid); }
   static uint32_t GetTid() { return syscall(__NR_gettid); }
 
+ private:
   Logger() : file_(NULL), session_file_(NULL), dirty_(false), streaming_(false), messaging_(false), error_(false) {
     const char* var = getenv("ROCPROFILER_LOG");
     if (var != NULL) file_ = fopen("/tmp/rocprofiler_log.txt", "a");
@@ -225,6 +225,42 @@ class Logger {
         " in " << __FUNCTION__ << " at " << __FILE__ << " line " << __LINE__                       \
                << rocprofiler::util::Logger::endl;                                                 \
   } while(0)
+#endif
+
+#if DEBUG_TRACE_ON
+inline static void DEBUG_TRACE(const char* fmt, ...) {
+  const int msg_sz = 512;
+  char msg_buf[msg_sz];
+
+  int ret = snprintf(msg_buf, msg_sz, "%u:%u ",
+    rocprofiler::util::Logger::GetPid(),
+    rocprofiler::util::Logger::GetTid());
+  if (ret < 0) {
+    printf("DEBUG_TRACE error1: snprintf error\n");
+    abort();
+  }
+  if (ret >= msg_sz) {
+    printf("DEBUG_TRACE error1: message trancated\n");
+    abort();
+  }
+
+  va_list valist;
+  va_start(valist, fmt);
+  ret = vsnprintf(msg_buf + ret, msg_sz - ret, fmt, valist);
+  if (ret < 0) {
+    printf("DEBUG_TRACE error2: snprintf error\n");
+    abort();
+  }
+  if (ret >= msg_sz) {
+    printf("DEBUG_TRACE error2: message trancated\n");
+    abort();
+  }
+  va_end(valist);
+
+  printf("%s", msg_buf); fflush(stdout);
+}
+#else
+inline static void DEBUG_TRACE(const char* fmt, ...) {}
 #endif
 
 #endif  // SRC_UTIL_LOGGER_H_

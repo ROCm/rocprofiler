@@ -382,29 +382,27 @@ hsa_status_t CreateQueuePro(
 
   // Create 'Enable' cmd packet
   const rocprofiler::util::AgentInfo* agent_info = hsa_rsrc->GetAgentInfo(agent);
-  const uint32_t dev_index = 1 << agent_info->dev_index;
+  const uint32_t dev_index = agent_info->dev_index;
   const uint32_t dev_mask = 1 << dev_index;
   if ((cmd_mask & dev_mask) == 0) {
     std::lock_guard<std::mutex> lck(cmd_mutex);
 
     if ((cmd_mask & dev_mask) == 0) {
-      cmd_mask |= dev_mask;
       // Allocating cmd vector
-      uint32_t mask = 1;
-      while (1) {
-        const uint32_t max = 1 << cmd_vec.size();
-        if (mask >= max) cmd_vec.push_back({});
-        if (((mask & dev_mask) != 0) || (mask == 0)) break;
-        mask <<= 1;
+      for (uint32_t i = cmd_vec.size(); i <= dev_index; i += 1) {
+        cmd_vec.push_back({});
       }
-      if (mask == 0) EXC_RAISING(status, "bad device index (" << dev_index << ")");
       // Creating cmd packets
       cmd_vec[dev_index].second = CreateEnableCmd(agent_info, cmd_vec[dev_index].first, Profile::LEGACY_SLOT_SIZE_PKT);
+      // Register processed device
+      cmd_mask |= dev_mask;
     }
   }
 
   // Enable counters for the queue
   rocprofiler::util::HsaRsrcFactory::Instance().Submit(*queue, cmd_vec[dev_index].first, cmd_vec[dev_index].second);
+
+  DEBUG_TRACE("QueueCreate: dev_index(%u) queue(%p)\n", dev_index, *queue);
 
   return HSA_STATUS_SUCCESS;
 }
@@ -584,9 +582,20 @@ PUBLIC_API hsa_status_t rocprofiler_open(hsa_agent_t agent, rocprofiler_feature_
     }
   }
 
+
   rocprofiler::Context** context_ret = reinterpret_cast<rocprofiler::Context**>(handle);
   *context_ret = rocprofiler::Context::Create(agent_info, queue, features, feature_count,
                                               properties->handler, properties->handler_arg);
+
+#if DEBUG_TRACE_ON
+  std::ostringstream oss;
+  for (rocprofiler_feature_t* p = features; p < features + feature_count; p += 1) {
+    oss << " " << p->name;
+  }
+  DEBUG_TRACE("ContextOpen: dev_index(%u) queue(%p) context(%p) features(%s)\n",
+    agent_info->dev_index, properties->queue, *context_ret, oss.str().c_str());
+#endif
+
   API_METHOD_SUFFIX
 }
 
@@ -595,6 +604,9 @@ PUBLIC_API hsa_status_t rocprofiler_close(rocprofiler_t* handle) {
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   if (context) rocprofiler::Context::Destroy(context);
+
+  DEBUG_TRACE("ContextClose: context(%p)\n", context);
+
   API_METHOD_SUFFIX
 }
 
@@ -637,6 +649,9 @@ PUBLIC_API hsa_status_t rocprofiler_start(rocprofiler_t* handle, uint32_t group_
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   context->Start(group_index);
+
+  DEBUG_TRACE("ContextStart: context(%p) group(%u)\n", context, group_index);
+
   API_METHOD_SUFFIX
 }
 
@@ -645,6 +660,9 @@ PUBLIC_API hsa_status_t rocprofiler_stop(rocprofiler_t* handle, uint32_t group_i
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   context->Stop(group_index);
+
+  DEBUG_TRACE("ContextStop: context(%p) group(%u)\n", context, group_index);
+
   API_METHOD_SUFFIX
 }
 
@@ -653,6 +671,9 @@ PUBLIC_API hsa_status_t rocprofiler_read(rocprofiler_t* handle, uint32_t group_i
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   context->Read(group_index);
+
+  DEBUG_TRACE("ContextRead: context(%p) group(%u)\n", context, group_index);
+
   API_METHOD_SUFFIX
 }
 
@@ -661,6 +682,9 @@ PUBLIC_API hsa_status_t rocprofiler_get_data(rocprofiler_t* handle, uint32_t gro
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   context->GetData(group_index);
+
+  DEBUG_TRACE("ContextGet: context(%p) group(%u)\n", context, group_index);
+
   API_METHOD_SUFFIX
 }
 
@@ -688,8 +712,7 @@ PUBLIC_API hsa_status_t rocprofiler_group_read(rocprofiler_group_t* group) {
 // Get profiling data
 PUBLIC_API hsa_status_t rocprofiler_group_get_data(rocprofiler_group_t* group) {
   API_METHOD_PREFIX
-  rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(group->context);
-  context->GetData(group->index);
+  rocprofiler_get_data(group->context, group->index);
   API_METHOD_SUFFIX
 }
 

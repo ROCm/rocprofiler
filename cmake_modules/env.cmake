@@ -63,8 +63,11 @@ if ( "$ENV{CXX}" STREQUAL "/usr/bin/clang++" )
 endif()
 
 ## Enable debug trace
+if ( DEFINED CMAKE_DEBUG_TRACE )
+  add_definitions ( -DDEBUG_TRACE_ON=1 )
+endif()
 if ( DEFINED ENV{CMAKE_DEBUG_TRACE} )
-  add_definitions ( -DDEBUG_TRACE=1 )
+  add_definitions ( -DDEBUG_TRACE_ON=1 )
 endif()
 
 ## Enable AQL-profile new API
@@ -129,6 +132,7 @@ message ( "-------ROCM_ROOT_DIR: ${ROCM_ROOT_DIR}" )
 message ( "-----CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}" )
 message ( "---CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}" )
 message ( "---------GPU_TARGETS: ${GPU_TARGETS}" )
+message ( "---CMAKE_DEBUG_TRACE: ${CMAKE_DEBUG_TRACE}" )
 
 ## Check the ROCm pathes
 if ( "${HSA_RUNTIME_INC_PATH}" STREQUAL "" )
