@@ -535,6 +535,7 @@ PUBLIC_API hsa_status_t rocprofiler_open(hsa_agent_t agent, rocprofiler_feature_
   rocprofiler::Context** context_ret = reinterpret_cast<rocprofiler::Context**>(handle);
   *context_ret = rocprofiler::Context::Create(agent_info, queue, features, feature_count,
                                               properties->handler, properties->handler_arg);
+
 #if DEBUG_TRACE_ON
   std::ostringstream oss;
   for (rocprofiler_feature_t* p = features; p < features + feature_count; p += 1) {
@@ -552,6 +553,9 @@ PUBLIC_API hsa_status_t rocprofiler_close(rocprofiler_t* handle) {
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   if (context) rocprofiler::Context::Destroy(context);
+
+  DEBUG_TRACE("ContextClose: context(%p)\n", context);
+
   API_METHOD_SUFFIX
 }
 
@@ -586,6 +590,9 @@ PUBLIC_API hsa_status_t rocprofiler_start(rocprofiler_t* handle, uint32_t group_
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   context->Start(group_index);
+
+  DEBUG_TRACE("ContextStart: context(%p) group(%u)\n", context, group_index);
+
   API_METHOD_SUFFIX
 }
 
@@ -594,6 +601,9 @@ PUBLIC_API hsa_status_t rocprofiler_stop(rocprofiler_t* handle, uint32_t group_i
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   context->Stop(group_index);
+
+  DEBUG_TRACE("ContextStop: context(%p) group(%u)\n", context, group_index);
+
   API_METHOD_SUFFIX
 }
 
@@ -602,6 +612,9 @@ PUBLIC_API hsa_status_t rocprofiler_read(rocprofiler_t* handle, uint32_t group_i
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   context->Read(group_index);
+
+  DEBUG_TRACE("ContextRead: context(%p) group(%u)\n", context, group_index);
+
   API_METHOD_SUFFIX
 }
 
@@ -610,6 +623,9 @@ PUBLIC_API hsa_status_t rocprofiler_get_data(rocprofiler_t* handle, uint32_t gro
   API_METHOD_PREFIX
   rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
   context->GetData(group_index);
+
+  DEBUG_TRACE("ContextGet: context(%p) group(%u)\n", context, group_index);
+
   API_METHOD_SUFFIX
 }
 
@@ -637,8 +653,7 @@ PUBLIC_API hsa_status_t rocprofiler_group_read(rocprofiler_group_t* group) {
 // Get profiling data
 PUBLIC_API hsa_status_t rocprofiler_group_get_data(rocprofiler_group_t* group) {
   API_METHOD_PREFIX
-  rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(group->context);
-  context->GetData(group->index);
+  rocprofiler_get_data(group->context, group->index);
   API_METHOD_SUFFIX
 }
 
