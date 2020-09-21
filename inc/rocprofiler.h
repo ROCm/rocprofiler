@@ -92,6 +92,8 @@ hsa_status_t rocprofiler_error_string(
 typedef enum {
   ROCPROFILER_FEATURE_KIND_METRIC = 0,
   ROCPROFILER_FEATURE_KIND_TRACE = 1,
+  ROCPROFILER_FEATURE_KIND_SPM_MOD = 2,
+  ROCPROFILER_FEATURE_KIND_PCSMP_MOD = 4
 } rocprofiler_feature_kind_t;
 
 // Profiling feture parameter

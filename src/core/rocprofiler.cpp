@@ -150,20 +150,6 @@ void RestoreHsaApi() {
   table->amd_ext_->hsa_amd_queue_intercept_register_fn = hsa_amd_queue_intercept_register_fn;
 }
 
-void PmcStarter(Context* context) {
-  hsa_agent_t agent = context->GetAgent();
-  // Create queue
-  hsa_queue_t* queue;
-  hsa_status_t status = rocprofiler::CreateQueuePro(agent, 1,
-    HSA_QUEUE_TYPE_MULTI, NULL, NULL, UINT32_MAX, UINT32_MAX, &queue);
-  if (status != HSA_STATUS_SUCCESS) EXC_RAISING(status, "CreateQueuePro");
-  HsaQueue hsa_queue(NULL, queue);
-  context->Start(0, &hsa_queue);
-  context->Read(0, &hsa_queue);
-  context->GetData(0);
-  hsa_queue_destroy(queue);
-}
-
 void StandaloneIntercept() {
   ::HsaApiTable* table = kHsaApiTable;
   table->core_->hsa_queue_create_fn = rocprofiler::CreateQueuePro;
@@ -213,6 +199,8 @@ uint32_t LoadTool() {
 
     rocprofiler_settings_t settings{};
     settings.intercept_mode = (intercept_mode != 0) ? 1 : 0;
+    settings.trace_size = TraceProfile::GetSize();
+    settings.trace_local = TraceProfile::IsLocal() ? 1: 0;
     settings.timeout = util::HsaRsrcFactory::GetTimeoutNs();
     settings.timestamp_on = InterceptQueue::IsTrackerOn() ? 1 : 0;
     settings.code_obj_tracking = 1;
@@ -220,6 +208,8 @@ uint32_t LoadTool() {
     if (handler) handler();
     else if (handler_prop) handler_prop(&settings);
 
+    TraceProfile::SetSize(settings.trace_size);
+    TraceProfile::SetLocal(settings.trace_local != 0);
     util::HsaRsrcFactory::SetTimeoutNs(settings.timeout);
     InterceptQueue::TrackerOn(settings.timestamp_on != 0);
     if (settings.intercept_mode != 0) intercept_mode = DISPATCH_INTERCEPT_MODE;
@@ -237,9 +227,40 @@ uint32_t LoadTool() {
   return intercept_mode;
 }
 
+void PmcStopper() {
+  rocprofiler::util::HsaRsrcFactory* rsrc = &rocprofiler::util::HsaRsrcFactory::Instance();
+
+  const uint32_t gpu_count = rsrc->GetCountOfGpuAgents();
+  for (uint32_t gpu_id = 0; gpu_id < gpu_count; gpu_id++) {
+    // Get agent info
+    const rocprofiler::util::AgentInfo* agent_info;
+    if (rsrc->GetGpuAgentInfo(gpu_id, &agent_info) == false) {
+      fprintf(stderr, "Error: GetGpuAgentInfo(%u) \n", gpu_id);
+      abort();
+    }
+
+    // Create queue
+    hsa_queue_t* queue;
+    hsa_status_t status = rocprofiler::CreateQueuePro(agent_info->dev_id, 1,
+            HSA_QUEUE_TYPE_MULTI, NULL, NULL, UINT32_MAX, UINT32_MAX, &queue);
+    if (status != HSA_STATUS_SUCCESS) EXC_RAISING(status, "CreateQueuePro ("
+            << gpu_id << ") " << std::hex << status);
+
+    // Submit packets
+    for (auto& pkt: Context::stop_packets_) {
+      rsrc->Submit(queue, &pkt);
+      // Wait for stop packet to complete
+      rsrc->SignalWaitRestore(pkt.completion_signal, 1);
+    }
+
+    hsa_queue_destroy(queue);
+  }
+}
+
 // Unload profiling tool librray
 void UnloadTool() {
   ONLOAD_TRACE("tool handle(" << tool_handle << ")");
+  //if (Context::k_concurrent_) PmcStopper();
   if (tool_handle) {
     tool_handler_t handler = reinterpret_cast<tool_handler_t>(dlsym(tool_handle, "OnUnloadTool"));
     if (handler == NULL) {
@@ -433,6 +454,8 @@ hsa_status_t hsa_amd_memory_async_copy_rect_interceptor(
 }
 
 rocprofiler_properties_t rocprofiler_properties;
+uint32_t TraceProfile::output_buffer_size_ = 0x2000000;  // 32M
+bool TraceProfile::output_buffer_local_ = true;
 std::atomic<Tracker*> Tracker::instance_{};
 Tracker::mutex_t Tracker::glob_mutex_;
 Tracker::counter_t Tracker::counter_ = 0;
@@ -707,7 +730,10 @@ PUBLIC_API hsa_status_t rocprofiler_stop_queue_callbacks() {
 // Method for iterating the events output data
 PUBLIC_API hsa_status_t rocprofiler_iterate_trace_data(
     rocprofiler_t* handle, hsa_ven_amd_aqlprofile_data_callback_t callback, void* data) {
-  return HSA_STATUS_ERROR;
+  API_METHOD_PREFIX
+  rocprofiler::Context* context = reinterpret_cast<rocprofiler::Context*>(handle);
+  context->IterateTraceData(callback, data);
+  API_METHOD_SUFFIX
 }
 
 ////////////////////////////////////////////////////////////////////////////////
