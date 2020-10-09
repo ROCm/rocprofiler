@@ -252,6 +252,32 @@ class Context {
       const hsa_status_t status =
           api_->hsa_ven_amd_aqlprofile_iterate_data(tuple.profile, DataCallback, &callback_data);
       if (status != HSA_STATUS_SUCCESS) AQL_EXC_RAISING(status, "context iterate data failed");
+
+      // Debug message
+#if DEBUG_TRACE_ON
+      const int debug_message_sz = 1024;
+      char debug_message_buf[debug_message_sz];
+      int ret = snprintf(debug_message_buf, debug_message_sz, "ContextData: context(%p) group(%u)", this, group_index);
+      if (ret < 0) {
+        printf("debug_message snprintf error1\n");
+        abort();
+      }
+      int pos = ret;
+      for (rocprofiler_feature_t* rinfo : *(tuple.info_vector)) {
+          int ret = snprintf(debug_message_buf + pos, debug_message_sz - pos, " %s(type(%d) kind=%d val=%lu)",
+            rinfo->name, (int)(rinfo->kind), (int)(rinfo->data.kind), rinfo->data.result_int64);
+          if (ret < 0) {
+            printf("debug_message snprintf error2\n");
+            abort();
+          }
+          pos += ret;
+          if (pos >= debug_message_sz) {
+            printf("debug_message truncated\n");
+            abort();
+          }
+      }
+      DEBUG_TRACE("%s\n", debug_message_buf);
+#endif
     }
   }
 
