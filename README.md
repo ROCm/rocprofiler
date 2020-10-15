@@ -157,7 +157,7 @@ Options:
 
   --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
-  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]
+  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [on]
     To support V3 code-object.
 
   --stats - generating kernel execution stats, file <output name>.stats.csv
