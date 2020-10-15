@@ -191,6 +191,6 @@ Configuration file:
       timestamp=off
       ctx-limit=0
       heartbeat=0
-      obj-tracking=off
+      obj-tracking=on
     ></defaults>
 ```
