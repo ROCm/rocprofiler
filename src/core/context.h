@@ -255,28 +255,14 @@ class Context {
 
       // Debug message
 #if DEBUG_TRACE_ON
-      const int debug_message_sz = 1024;
-      char debug_message_buf[debug_message_sz];
-      int ret = snprintf(debug_message_buf, debug_message_sz, "ContextData: context(%p) group(%u)", this, group_index);
-      if (ret < 0) {
-        printf("debug_message snprintf error1\n");
-        abort();
-      }
-      int pos = ret;
-      for (rocprofiler_feature_t* rinfo : *(tuple.info_vector)) {
-          int ret = snprintf(debug_message_buf + pos, debug_message_sz - pos, " %s(type(%d) kind=%d val=%lu)",
+      DEBUG_TRACE("ContextData: context(%p) group(%u) features(%u)\n",
+        this, group_index, tuple.info_vector->size());
+      for (uint32_t ind = 0; ind < tuple.info_vector->size(); ++ind) {
+          rocprofiler_feature_t* rinfo = tuple.info_vector->at(ind);
+          DEBUG_TRACE(">> feature %u: context(%p) group(%u) %s(type(%d) kind=%d val=%lu)\n",
+            ind, this, group_index,
             rinfo->name, (int)(rinfo->kind), (int)(rinfo->data.kind), rinfo->data.result_int64);
-          if (ret < 0) {
-            printf("debug_message snprintf error2\n");
-            abort();
-          }
-          pos += ret;
-          if (pos >= debug_message_sz) {
-            printf("debug_message truncated\n");
-            abort();
-          }
       }
-      DEBUG_TRACE("%s\n", debug_message_buf);
 #endif
     }
   }
