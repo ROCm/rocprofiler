@@ -246,7 +246,7 @@ inline static void DEBUG_TRACE(const char* fmt, ...) {
 
   va_list valist;
   va_start(valist, fmt);
-  ret = vsnprintf(msg_buf, msg_sz, fmt, valist);
+  ret = vsnprintf(msg_buf + ret, msg_sz - ret, fmt, valist);
   if (ret < 0) {
     printf("DEBUG_TRACE error2: snprintf error\n");
     abort();
