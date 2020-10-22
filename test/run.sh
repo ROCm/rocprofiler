@@ -76,10 +76,16 @@ export ROCP_METRICS=metrics.xml
 ## C test
 eval_test "C test" ./test/c_test
 
-## Standalone sampling usage model test
+## Standalone sampling usage model test1 with disabled counters
 unset HSA_TOOLS_LIB
 unset ROCP_TOOL_LIB
-eval_test "Standalone sampling usage model test" ./test/standalone_test
+eval_test "Standalone sampling usage model test1" ./test/standalone_test
+
+## Standalone sampling usage model test2 with enabled counters
+export HSA_TOOLS_LIB=librocprofiler64.so
+unset ROCP_TOOL_LIB
+eval_test "Standalone sampling usage model test2" ./test/standalone_test
+
 # Standalone intercepting test
 # ROC profiler library loaded by HSA runtime
 export HSA_TOOLS_LIB=librocprofiler64.so.1

@@ -159,6 +159,7 @@ int main() {
   hsa_queue_t* queue[queue_count];
   for (unsigned queue_ind = 0; queue_ind < queue_count; ++queue_ind) {
     if (HsaRsrcFactory::Instance().CreateQueue(agent_info, 128, &queue[queue_ind]) == false) abort();
+    std::cout << "create queue " << queue_ind << ", " << queue[queue_ind] << std::endl;
   }
   hsa_queue_t* prof_queue = queue[0];
 
@@ -178,13 +179,13 @@ int main() {
   TEST_STATUS(status == HSA_STATUS_SUCCESS);
   std::cout << "start" << std::endl;
 
-  for (unsigned ind = 0; ind < 3; ++ind) {
+  for (unsigned ind = 1; ind < 4; ++ind) {
 #if 1
     const unsigned queue_ind = ind % queue_count;
-    hsa_queue_t* prof_queue = queue[queue_ind];
-    //ret_val = RunKernel<DummyKernel, TestAql>(0, NULL, NULL, prof_queue);
-    ret_val = RunKernel<SimpleConvolution, TestAql>(0, NULL, NULL, prof_queue);
-    std::cout << "run kernel, queue " << queue_ind << std::endl;
+    hsa_queue_t* run_queue = queue[queue_ind];
+    //ret_val = RunKernel<DummyKernel, TestAql>(0, NULL, NULL, run_queue);
+    ret_val = RunKernel<SimpleConvolution, TestAql>(0, NULL, NULL, run_queue);
+    std::cout << "run kernel, queue " << queue_ind << ", " << run_queue << std::endl;
 #else
     sleep(3);
 #endif
