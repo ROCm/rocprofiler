@@ -151,7 +151,6 @@ class InterceptQueue {
                          hsa_amd_queue_intercept_packet_writer writer) {
     const packet_t* packets_arr = reinterpret_cast<const packet_t*>(in_packets);
     InterceptQueue* obj = reinterpret_cast<InterceptQueue*>(data);
-    Queue* proxy = obj->proxy_;
     const uint32_t dev_index = obj->agent_info_->dev_index;
     hsa_queue_t* hsa_queue = obj->queue_;
 
