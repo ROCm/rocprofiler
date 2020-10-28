@@ -152,6 +152,7 @@ void RestoreHsaApi() {
 
 void StandaloneIntercept() {
   ::HsaApiTable* table = kHsaApiTable;
+  hsa_queue_create_fn = table->core_->hsa_queue_create_fn;
   table->core_->hsa_queue_create_fn = rocprofiler::CreateQueuePro;
 }
 
@@ -539,7 +540,7 @@ PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, uint64_t fa
     rocprofiler::StandaloneIntercept();
   }
 
-  ONLOAD_TRACE_END();
+  ONLOAD_TRACE("end intercept_mode(" << intercept_mode << ")");
   return true;
 }
 

@@ -112,6 +112,8 @@ class InterceptQueue {
       status = callbacks_.create(*queue, callback_data_);
     }
 
+    DEBUG_TRACE("InterceptQueueCreate: dev_index(%u) queue(%p)\n", obj->agent_info_->dev_index, *queue);
+
     in_create_call_ = false;
     return status;
   }
@@ -147,8 +149,8 @@ class InterceptQueue {
     return status;
   }
 
-  static void OnSubmitCB_dbg(const void* in_packets, uint64_t count, uint64_t user_que_idx, void* data,
-                         hsa_amd_queue_intercept_packet_writer writer) {
+  static void submit_debug(const void* in_packets, uint64_t count, uint64_t user_que_idx, void* data) {
+
     const packet_t* packets_arr = reinterpret_cast<const packet_t*>(in_packets);
     InterceptQueue* obj = reinterpret_cast<InterceptQueue*>(data);
     const uint32_t dev_index = obj->agent_info_->dev_index;
@@ -160,14 +162,32 @@ class InterceptQueue {
     for (uint64_t j = 0; j < count; ++j) {
       const packet_t* packet = &packets_arr[j];
       hsa_packet_type_t packet_type = GetHeaderType(packet);
-      DEBUG_TRACE(">> packet %lu: dev_index(%u) queue(%p) type(%d)\n", user_que_idx + j, dev_index, hsa_queue, (int)packet_type);
+      if (packet_type == HSA_PACKET_TYPE_KERNEL_DISPATCH) {
+        const hsa_kernel_dispatch_packet_t* dispatch_packet =
+            reinterpret_cast<const hsa_kernel_dispatch_packet_t*>(packet);
+        uint64_t kernel_object = dispatch_packet->kernel_object;
+        const amd_kernel_code_t* kernel_code = GetKernelCode(kernel_object);
+        const char* kernel_name = QueryKernelName(kernel_object, kernel_code);
+        DEBUG_TRACE(">> packet %lu: dev_index(%u) queue(%p) type(%d) kernel(\"%s\")\n",
+          user_que_idx + j, dev_index, hsa_queue, (int)packet_type, kernel_name);
+      } else {
+        DEBUG_TRACE(">> packet %lu: dev_index(%u) queue(%p) type(%d)\n",
+          user_que_idx + j, dev_index, hsa_queue, (int)packet_type);
+      }
     }
+  }
+
+  static void OnSubmitCB_dbg(const void* in_packets, uint64_t count, uint64_t user_que_idx, void* data,
+                         hsa_amd_queue_intercept_packet_writer writer) {
+    submit_debug(in_packets, count, user_que_idx, data);
+    const packet_t* packets_arr = reinterpret_cast<const packet_t*>(in_packets);
+    writer(packets_arr, count);
   }
 
   static void OnSubmitCB_opt(const void* in_packets, uint64_t count, uint64_t user_que_idx, void* data,
                          hsa_amd_queue_intercept_packet_writer writer) {
 #if DEBUG_TRACE_ON
-    OnSubmitCB_dbg(in_packets, count, user_que_idx, data, writer);
+    submit_debug(in_packets, count, user_que_idx, data);
 #endif
 
     const packet_t* packets_arr = reinterpret_cast<const packet_t*>(in_packets);
