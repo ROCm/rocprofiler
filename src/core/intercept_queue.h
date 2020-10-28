@@ -99,6 +99,8 @@ class InterceptQueue {
       status = proxy->SetInterceptCB(OnSubmitCB_ctrace, obj);
     } else if (opt_mode_) {
       status = proxy->SetInterceptCB(OnSubmitCB_opt, obj);
+    } else if (dbg_mode_) {
+      status = proxy->SetInterceptCB(OnSubmitCB_dbg, obj);
     } else {
       status = proxy->SetInterceptCB(OnSubmitCB, obj);
     }
@@ -145,8 +147,30 @@ class InterceptQueue {
     return status;
   }
 
+  static void OnSubmitCB_dbg(const void* in_packets, uint64_t count, uint64_t user_que_idx, void* data,
+                         hsa_amd_queue_intercept_packet_writer writer) {
+    const packet_t* packets_arr = reinterpret_cast<const packet_t*>(in_packets);
+    InterceptQueue* obj = reinterpret_cast<InterceptQueue*>(data);
+    Queue* proxy = obj->proxy_;
+    const uint32_t dev_index = obj->agent_info_->dev_index;
+    hsa_queue_t* hsa_queue = obj->queue_;
+
+    DEBUG_TRACE("Submit: dev_index(%u) queue(%p) idx(%lu)\n", dev_index, hsa_queue, user_que_idx);
+
+    // Travers input packets
+    for (uint64_t j = 0; j < count; ++j) {
+      const packet_t* packet = &packets_arr[j];
+      hsa_packet_type_t packet_type = GetHeaderType(packet);
+      DEBUG_TRACE(">> packet %lu: dev_index(%u) queue(%p) type(%d)\n", user_que_idx + j, dev_index, hsa_queue, (int)packet_type);
+    }
+  }
+
   static void OnSubmitCB_opt(const void* in_packets, uint64_t count, uint64_t user_que_idx, void* data,
                          hsa_amd_queue_intercept_packet_writer writer) {
+#if DEBUG_TRACE_ON
+    OnSubmitCB_dbg(in_packets, count, user_que_idx, data, writer);
+#endif
+
     const packet_t* packets_arr = reinterpret_cast<const packet_t*>(in_packets);
     InterceptQueue* obj = reinterpret_cast<InterceptQueue*>(data);
     Queue* proxy = obj->proxy_;
@@ -507,6 +531,7 @@ class InterceptQueue {
   static void TrackerOn(bool on) { tracker_on_ = on; }
   static bool IsTrackerOn() { return tracker_on_; }
 
+  static bool dbg_mode_;
   static bool opt_mode_;
   static uint32_t k_concurrent_;
 

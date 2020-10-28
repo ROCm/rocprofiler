@@ -531,6 +531,11 @@ PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, uint64_t fa
     rocprofiler::ProxyQueue::HsaIntercept(table);
     rocprofiler::InterceptQueue::HsaIntercept(table);
   } else {
+#if DEBUG_TRACE_ON
+    rocprofiler::InterceptQueue::dbg_mode_ = true;
+    rocprofiler::ProxyQueue::HsaIntercept(table);
+    rocprofiler::InterceptQueue::HsaIntercept(table);
+#endif
     rocprofiler::StandaloneIntercept();
   }
 
