@@ -635,7 +635,7 @@ example but in SINGLEGROUP mode when only one group is allowed the context handl
 saved and then direct context method rocprofiler_get_data with default group index equal to 0
 can be used.
 
-hsa_status_t_dispatch_callback(
+hsa_status_t dispatch_callback(
     const rocprofiler_callback_data_t* callback_data,
     void* user_data,
     rocprofiler_group_t* group)
