@@ -980,7 +980,7 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
   // Set HSA intercepting
   check_env_var("ROCP_HSA_INTERC", settings->hsa_intercepting);
   if (settings->hsa_intercepting) rocprofiler_set_hsa_callbacks(hsa_callbacks, (void*)14);
-  // Enable concurrent SQTT
+  // Enable concurrent mode
   check_env_var("ROCP_K_CONCURRENT", settings->k_concurrent);
   // Enable optmized mode
   check_env_var("ROCP_OPT_MODE", settings->opt_mode);
