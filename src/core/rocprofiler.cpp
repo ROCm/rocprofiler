@@ -403,7 +403,7 @@ hsa_status_t CreateQueuePro(
   // Enable counters for the queue
   rocprofiler::util::HsaRsrcFactory::Instance().Submit(*queue, cmd_vec[dev_index].first, cmd_vec[dev_index].second);
 
-  DEBUG_TRACE("QueueCreate: dev_index(%u) queue(%p)\n", dev_index, *queue);
+  DEBUG_TRACE("ProfQueueCreate: dev_index(%u) queue(%p)\n", dev_index, *queue);
 
   return HSA_STATUS_SUCCESS;
 }
@@ -534,6 +534,7 @@ PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, uint64_t fa
   } else {
 #if DEBUG_TRACE_ON
     rocprofiler::InterceptQueue::dbg_mode_ = true;
+    rocprofiler::util::HsaRsrcFactory::EnableExecutableTracking(table);
     rocprofiler::ProxyQueue::HsaIntercept(table);
     rocprofiler::InterceptQueue::HsaIntercept(table);
 #endif
