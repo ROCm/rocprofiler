@@ -87,6 +87,7 @@ struct kernel_properties_t {
   uint32_t sgpr_count;
   uint32_t fbarrier_count;
   hsa_signal_t signal;
+  uint64_t object;
 };
 
 // Context stored entry type
@@ -392,7 +393,7 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
     const std::string nik_name = (to_truncate_names == 0) ? entry->data.kernel_name : filtr_kernel_name(entry->data.kernel_name);
     const AgentInfo* agent_info = HsaRsrcFactory::Instance().GetAgentInfo(entry->agent);
 
-    fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), kernel-name(\"%s\")",
+    fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), obj(0x%lx), kernel-name(\"%s\")",
       index,
       agent_info->dev_index,
       entry->data.queue_id,
@@ -407,6 +408,7 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
       (entry->kernel_properties.sgpr_count + agent_info->sgpr_block_dflt) * agent_info->sgpr_block_size,
       entry->kernel_properties.fbarrier_count,
       entry->kernel_properties.signal.handle,
+      entry->kernel_properties.object,
       nik_name.c_str());
     if (record) fprintf(file_handle, ", time(%lu,%lu,%lu,%lu)",
       record->dispatch,
@@ -540,6 +542,37 @@ bool context_pool_handler(const rocprofiler_pool_entry_t* entry, void* arg) {
   return false;
 }
 
+// Profiling completion handler for concurrent implementation
+// Dump the context entry
+// Return true if the context was dumped successfully
+bool context_handler_con(rocprofiler_group_t group, void* arg) {
+  context_entry_t* entry = reinterpret_cast<context_entry_t*>(arg);
+
+  if (pthread_mutex_lock(&mutex) != 0) {
+    perror("pthread_mutex_lock");
+    abort();
+  }
+
+  bool ret = true;
+  ret = dump_context_entry(entry);
+  if (ret == false) {
+    fprintf(stderr, "tool error: context is not complete\n");
+    abort();
+  }
+
+  if (trace_on) {
+    fprintf(stdout, "tool::handler_con: context_map %d tid %u\n", (int)(ctx_a_map->size()), GetTid());
+    fflush(stdout);
+  }
+
+  if (pthread_mutex_unlock(&mutex) != 0) {
+    perror("pthread_mutex_unlock");
+    abort();
+  }
+
+  return false;
+}
+
 bool check_filter(const rocprofiler_callback_data_t* callback_data, const callbacks_data_t* tool_data) {
   bool found = true;
 
@@ -617,6 +650,7 @@ void set_kernel_properties(const rocprofiler_callback_data_t* callback_data,
   kernel_properties_ptr->sgpr_count = AMD_HSA_BITS_GET(kernel_code->compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_GRANULATED_WAVEFRONT_SGPR_COUNT);
   kernel_properties_ptr->fbarrier_count = kernel_code->workgroup_fbarrier_count;
   kernel_properties_ptr->signal = callback_data->completion_signal;
+  kernel_properties_ptr->object = callback_data->packet->kernel_object;
 }
 
 // Kernel disoatch callback
@@ -881,6 +915,7 @@ rocprofiler_hsa_callbacks_t hsa_callbacks {
   hsa_unified_callback,
   hsa_unified_callback,
   hsa_unified_callback,
+  NULL,
   NULL
 };
 
@@ -889,7 +924,7 @@ hsa_status_t hsa_ksymbol_cb(rocprofiler_hsa_cb_id_t id,
                     const rocprofiler_hsa_callback_data_t* data,
                     void* arg)
 {
-  HsaRsrcFactory::SetKernelNameRef(data->ksymbol.object, data->ksymbol.name, data->ksymbol.destroy);
+  HsaRsrcFactory::SetKernelNameRef(data->ksymbol.object, data->ksymbol.name, data->ksymbol.unload);
   return HSA_STATUS_SUCCESS;
 }
 
@@ -1195,8 +1230,6 @@ void rocprofiler_unload(bool is_destr) {
     abort();
   }
 
-  if (is_destr) CTX_OUTSTANDING_WAIT = 0;
-
   // Unregister dispatch callback
   rocprofiler_remove_queue_callbacks();
 
@@ -1216,7 +1249,6 @@ void rocprofiler_unload(bool is_destr) {
   }
   fflush(stdout);
 
-#if 0
   // Cleanup
   if (callbacks_data != NULL) {
     delete[] callbacks_data->features;
@@ -1233,7 +1265,6 @@ void rocprofiler_unload(bool is_destr) {
   range_vec = NULL;
   delete context_array;
   context_array = NULL;
-#endif
 
   ONLOAD_TRACE_END();
 }

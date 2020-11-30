@@ -219,6 +219,7 @@ uint32_t LoadTool() {
     if (settings.k_concurrent) {
       Context::k_concurrent_ = settings.k_concurrent;
       InterceptQueue::k_concurrent_ = settings.k_concurrent;
+      InterceptQueue::TrackerOn(true);
     }
     if (settings.opt_mode) InterceptQueue::opt_mode_ = true;
   }
@@ -536,7 +537,8 @@ PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, uint64_t fa
     rocprofiler::StandaloneIntercept();
   }
 
-  ONLOAD_TRACE_END();
+  ONLOAD_TRACE("end intercept_mode(" << std::hex << intercept_mode << ")" <<
+               " intercept_mode_mask(" << std::hex << intercept_mode_mask << ")" << std::dec);
   return true;
 }
 
