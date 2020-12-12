@@ -57,8 +57,8 @@ extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
 // Returning library version
 
-uint32_t rocprofiler_version_major();
-uint32_t rocprofiler_version_minor();
+uint32_t rocprofiler_version_major(void);
+uint32_t rocprofiler_version_minor(void);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Global properties structure
@@ -275,11 +275,11 @@ hsa_status_t rocprofiler_set_queue_callbacks(
     void* data);                                       // [in/out] passed callbacks data
 
 // Remove queue callbacks
-hsa_status_t rocprofiler_remove_queue_callbacks();
+hsa_status_t rocprofiler_remove_queue_callbacks(void);
 
 // Start/stop queue callbacks
-hsa_status_t rocprofiler_start_queue_callbacks();
-hsa_status_t rocprofiler_stop_queue_callbacks();
+hsa_status_t rocprofiler_start_queue_callbacks(void);
+hsa_status_t rocprofiler_stop_queue_callbacks(void);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Start/stop profiling
