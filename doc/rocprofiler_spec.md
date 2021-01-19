@@ -746,7 +746,9 @@ Fetching a context entry:
 ```
 ### 5.5. Standalone Sampling Usage Code Example
 ```
-The profiling metrics are being read from separate standalone queue other than the application kernels are submitted to. To enable the sampling mode, the profiling mode in all user queues should be enabled.  It can be done by loading ROC-profiler library to HSA runtime using the environment variable HSA_TOOLS_LIB for all shell sessions.
+The profiling metrics are being read from separate standalone queue other than the application kernels are submitted to.
+To enable the sampling mode, the profiling mode in all user queues should be enabled.  It can be done by loading ROC-profiler
+library to HSA runtime using the environment variable HSA_TOOLS_LIB for all shell sessions.
    // Sampling rate
    uint32_t sampling_rate = <some rate>;
    // Sampling count
