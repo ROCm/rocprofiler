@@ -193,7 +193,9 @@ Tracing can be filtered by events names using profiler input file and by enablin
 #### 3.2.1.	Filtering traced APIs
 A list of traced API names can be specified in profiler input file.
 An example of input file line for ROCr runtime trace (HAS API):
+```
 hsa: hsa_queue_create hsa_amd_memory_pool_allocate
+```
 #### 3.2.2.	Tracing time period
 Trace can be dumped periodically with initial delay, dumping period length and rate:
 ```
