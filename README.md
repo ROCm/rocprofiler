@@ -68,6 +68,7 @@ To use the rocProfiler API you need the API header and to link your application 
 ## Internal 'simple_convolution' test run script:
 ```
   cd .../rocprofiler/build
+  make mytest
   run.sh
 ```
 
