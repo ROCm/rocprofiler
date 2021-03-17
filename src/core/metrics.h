@@ -45,6 +45,7 @@ namespace rocprofiler {
 struct counter_t {
   std::string name;
   event_t event;
+  uint32_t engine_number;
 };
 typedef std::vector<const counter_t*> counters_vec_t;
 
@@ -134,7 +135,6 @@ class MetricsDict {
 
   const Metric* Get(const std::string& name) const {
     const Metric* metric = NULL;
-
     auto it = cache_.find(name);
     if (it != cache_.end()) metric = it->second;
     else {
@@ -146,6 +146,7 @@ class MetricsDict {
         uint32_t block_index = 0;
         bool indexed = false;
         const std::size_t pos1 = block_name.find('[');
+        
         if (pos1 != std::string::npos) {
           const std::size_t pos2 = block_name.find(']');
           if (pos2 == std::string::npos) EXC_RAISING(HSA_STATUS_ERROR, "Malformed metric name '" << name << "'");
@@ -159,17 +160,17 @@ class MetricsDict {
         const hsa_ven_amd_aqlprofile_block_name_t block_id = (hsa_ven_amd_aqlprofile_block_name_t)query.id;
         if ((query.instance_count > 1) && (indexed == false)) EXC_RAISING(HSA_STATUS_ERROR, "Malformed indexed metric name '" << name << "'");
         const uint32_t event_id = atol(event_str.c_str());
-        const counter_t counter = {name, {block_id, block_index, event_id}};
+        const counter_t counter = {name, {block_id, block_index, event_id}, 0};
         metric = new BaseMetric(name, counter);
       }
     }
-
+    
     return metric;
   }
 
   uint32_t Size() const { return cache_.size(); }
-  const_iterator_t Begin() const { return cache_.begin(); }
-  const_iterator_t End() const { return cache_.end(); }
+  const_iterator_t begin() const { return cache_.begin(); }
+  const_iterator_t end() const { return cache_.end(); }
 
   std::string GetAgentName() const { return agent_name_; }
 
@@ -247,45 +248,29 @@ class MetricsDict {
 
           const hsa_ven_amd_aqlprofile_id_query_t query = Translate(agent_info, block_name);
           const hsa_ven_amd_aqlprofile_block_name_t block_id = (hsa_ven_amd_aqlprofile_block_name_t)query.id;
+          bool need_handle_engines = query.attr & 0b10;
+         
           if (query.instance_count > 1) {
-            for (unsigned block_index = 0; block_index < query.instance_count; ++block_index) {
-              std::ostringstream full_name;
-              full_name << name << '[' << block_index << ']';
-              std::ostringstream block_insance;
-              block_insance << block_name << "[" << block_index << "]";
-              std::ostringstream alias;
-              alias << block_insance.str() << ":" << event_str;
-              const counter_t counter = {full_name.str(), {block_id, block_index, event_id}};
-              AddMetric(full_name.str(), alias.str(), counter);
-            }
+              for (unsigned block_index = 0; block_index < query.instance_count; ++block_index) {
+                std::ostringstream full_name;
+                full_name << name << '[' << block_index << ']';
+                event_t event{block_id, block_index, event_id};
+                if (need_handle_engines) {
+                  AddMetricWithEngine(full_name.str(), event, metrics_list, node, do_lookup);
+                } else {
+                  AddMetric(full_name.str(), event, 0);
+                }
+              }
           } else {
-            const std::string alias = block_name + ":" + event_str;
-            const counter_t counter = {name, {block_id, 0, event_id}};
-            AddMetric(name, alias, counter);
+            event_t event{block_id, 0, event_id};
+            if (need_handle_engines) {
+              AddMetricWithEngine(name, event, metrics_list, node, do_lookup);
+            } else {
+              AddMetric(name, event, 0);
+            }
           }
         } else {
-          xml::Expr* expr_obj = NULL;
-          try {
-            expr_obj = new xml::Expr(expr_str, new ExprCache(&cache_));
-          } catch(const xml::exception_t& exc) {
-              if (do_lookup) metrics_list.push_back(node);
-              else throw(exc);
-          }
-          if (expr_obj) {
-#if 0
-            std::cout << "# " << descr << std::endl;
-            std::cout << name << "=" << expr_obj->String() << "\n" << std::endl;
-#endif
-            counters_vec_t counters_vec;
-            for (const std::string& var : expr_obj->GetVars()) {
-              auto it = cache_.find(var);
-              if (it == cache_.end()) {
-                EXC_RAISING(HSA_STATUS_ERROR, "Bad metric '" << name << "', var '" << var << "' is not found");
-              }
-              it->second->GetCounters(counters_vec);
-            }
-            AddMetric(name, counters_vec, expr_obj);
-          }
+          AddExpressionMetric(name, expr_str, metrics_list, node, do_lookup);
         }
 
         auto cur = it++;
@@ -304,11 +289,11 @@ class MetricsDict {
     }
   }
 
-  const Metric* AddMetric(const std::string& name, const std::string& /*alias*/, const counter_t& counter) {
+  const Metric* AddMetric(const std::string& name, const event_t& event, uint32_t num_engine) {
     const Metric* metric = NULL;
     const auto ret = cache_.insert({name, NULL});
     if (ret.second) {
-      metric = new BaseMetric(name, counter);
+      metric = new BaseMetric(name, {name,event,num_engine});
       ret.first->second = metric;
     } else EXC_RAISING(HSA_STATUS_ERROR, "metric redefined '" << name << "'");
     return metric;
@@ -322,6 +307,50 @@ class MetricsDict {
       ret.first->second = metric;
     } else EXC_RAISING(HSA_STATUS_ERROR, "expr-metric redefined '" << name << "'");
     return metric;
+  }
+
+  void AddExpressionMetric(const std::string & metric_name, const std::string & expr_str, xml::Xml::node_list_t &metrics_list, xml::Xml::level_t* node, bool do_lookup) {
+    xml::Expr* expr_obj = NULL;
+    try {
+      expr_obj = new xml::Expr(expr_str, new ExprCache(&cache_));
+    } catch(const xml::exception_t& exc) {
+      if (do_lookup) { 
+        metrics_list.push_back(node);
+      } else {
+        throw(exc);
+      }
+    }
+    if (expr_obj) {
+#if 0
+            std::cout << "# " << descr << std::endl;
+            std::cout << name << "=" << expr_obj->String() << "\n" << std::endl;
+#endif
+      counters_vec_t counters_vec;
+      for (const std::string& var : expr_obj->GetVars()) {
+        auto it = cache_.find(var);
+        if (it == cache_.end()) {
+          EXC_RAISING(HSA_STATUS_ERROR, "Bad metric '" << metric_name << "', var '" << var << "' is not found");
+        }
+        it->second->GetCounters(counters_vec);
+      }
+      AddMetric(metric_name, counters_vec, expr_obj);
+    } 
+  }
+
+  void AddMetricWithEngine(const std::string& base_name,
+                           const event_t& event, xml::Xml::node_list_t &metrics_list,
+                           xml::Xml::level_t* node, 
+                           bool do_lookup) {
+    std::ostringstream sum_expression_stream;
+    for (uint8_t engine = 0; engine < 4; engine++) {
+      std::ostringstream extended_name;
+      extended_name << base_name << "[" << engine << "]";
+      AddMetric(extended_name.str(), event, engine);
+      sum_expression_stream << extended_name.str() << '+';
+    }
+    std::string sum_expression = sum_expression_stream.str();
+    sum_expression.pop_back();
+    AddExpressionMetric(base_name, sum_expression, metrics_list, node, do_lookup);
   }
 
   void Print() {

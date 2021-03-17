@@ -30,7 +30,13 @@ THE SOFTWARE.
 #include <sstream>
 #include <string.h>
 
+
+
 namespace xml {
+
+static const std::set<std::string> blocks_names_with_engines = {"TCP", "SQ", "TCP_TCP_TA_DATA_STALL_CYCLES", "SQ_WAVES", "SQ_INSTS_VALU", "SQ_INSTS_VMEM_WR", "SQ_INSTS_VMEM_RD", "SQ_INSTS_SALU", "SQ_INSTS_SMEM", "SQ_INSTS_FLAT", "SQ_INSTS_FLAT_LDS_ONLY", "SQ_INSTS_LDS", "SQ_INSTS_GDS", "SQ_WAIT_INST_LDS", "SQ_ACTIVE_INST_VALU", "SQ_INST_CYCLES_SALU", "SQ_THREAD_CYCLES_VALU", "SQ_LDS_BANK_CONFLICT"};
+
+
 class exception_t : public std::exception {
  public:
   explicit exception_t(const std::string& msg) : str_(msg) {}
@@ -306,11 +312,21 @@ class var_expr_t : public bin_expr_t {
 class fun_expr_t : public bin_expr_t {
  public:
   typedef std::vector<var_expr_t> vvect_t;
-  fun_expr_t(const std::string& fname, const std::string& vname, const uint32_t& vnum) : fname_(fname) {
-    for (uint32_t i = 0; i < vnum; ++i) {
-      std::ostringstream var_full_name;
-      var_full_name << vname << "[" << i << "]";
-      vvect.push_back(var_expr_t(var_full_name.str()));
+  fun_expr_t(const std::string& fname, const std::string& vname, const uint32_t& vnum, const uint32_t& num_eng) : fname_(fname) {
+    if (num_eng) {
+      for (uint32_t i = 0; i < vnum; ++i) {
+        for (uint32_t j = 0; j < num_eng; ++j) {
+          std::ostringstream var_full_name;
+          var_full_name << vname << "[" << i << "]" << "[" << j << "]";
+          vvect.push_back(var_expr_t(var_full_name.str()));
+        }
+      }
+    } else {
+      for (uint32_t i = 0; i < vnum; ++i) {
+        std::ostringstream var_full_name;
+        var_full_name << vname << "[" << i << "]";
+        vvect.push_back(var_expr_t(var_full_name.str()));
+      }
     }
   }
   const vvect_t& GetVars() const { return vvect; }
@@ -330,7 +346,7 @@ class fun_expr_t : public bin_expr_t {
 };
 class sum_expr_t : public fun_expr_t {
  public:
-  sum_expr_t(const std::string& vname, const uint32_t& vnum) : fun_expr_t("sum", vname, vnum) {}
+  sum_expr_t(const std::string& vname, const uint32_t& vnum, const uint32_t& num_eng) : fun_expr_t("sum", vname, vnum, num_eng) {}
   args_t Eval(const args_cache_t& args) const {
     args_t result = 0;
     for (const auto& var : GetVars()) result += var.Eval(args);
@@ -339,7 +355,7 @@ class sum_expr_t : public fun_expr_t {
 };
 class avr_expr_t : public fun_expr_t {
  public:
-  avr_expr_t(const std::string& vname, const uint32_t& vnum) : fun_expr_t("avr", vname, vnum) {}
+  avr_expr_t(const std::string& vname, const uint32_t& vnum, const uint32_t& num_eng) : fun_expr_t("avr", vname, vnum, num_eng) {}
   args_t Eval(const args_cache_t& args) const {
     args_t result = 0;
     for (const auto& var : GetVars()) result += var.Eval(args);
@@ -348,7 +364,7 @@ class avr_expr_t : public fun_expr_t {
 };
 class min_expr_t : public fun_expr_t {
  public:
-  min_expr_t(const std::string& vname, const uint32_t& vnum) : fun_expr_t("min", vname, vnum) {}
+  min_expr_t(const std::string& vname, const uint32_t& vnum, const uint32_t& num_eng) : fun_expr_t("min", vname, vnum, num_eng) {}
   args_t Eval(const args_cache_t& args) const {
     args_t result = ARGS_MAX;
     for (const auto& var : GetVars()) {
@@ -360,7 +376,7 @@ class min_expr_t : public fun_expr_t {
 };
 class max_expr_t : public fun_expr_t {
  public:
-  max_expr_t(const std::string& vname, const uint32_t& vnum) : fun_expr_t("max", vname, vnum) {}
+  max_expr_t(const std::string& vname, const uint32_t& vnum, const uint32_t& num_eng) : fun_expr_t("max", vname, vnum, num_eng) {}
   args_t Eval(const args_cache_t& args) const {
     args_t result = 0;
     for (const auto& var : GetVars()) {
@@ -406,18 +422,19 @@ inline const bin_expr_t* bin_expr_t::CreateArg(Expr* obj, const std::string str)
       char* fname = NULL;
       char* vname = NULL;
       int vnum = 0;
-      int ret = sscanf(str.c_str(), "%m[a-zA-Z_](%m[0-9a-zA-Z_],%d)", &fname, &vname, &vnum);
-      if (ret == 3) {
+      int num_eng = 0;
+      int ret = sscanf(str.c_str(), "%m[a-zA-Z_](%m[0-9a-zA-Z_],%d,%d)", &fname, &vname, &vnum, &num_eng);
+      if (ret >= 3) {
         const std::string fun_name(fname);
         const fun_expr_t* farg = NULL;
         if (fun_name == "sum") {
-          farg = new sum_expr_t(vname, vnum);
+          farg = new sum_expr_t(vname, vnum, num_eng);
         } else if (fun_name == "avr") {
-          farg = new avr_expr_t(vname, vnum);
+          farg = new avr_expr_t(vname, vnum, num_eng);
         } else if (fun_name == "min") {
-          farg = new min_expr_t(vname, vnum);
+          farg = new min_expr_t(vname, vnum, num_eng);
         } else if (fun_name == "max") {
-          farg = new max_expr_t(vname, vnum);
+          farg = new max_expr_t(vname, vnum, num_eng);
         }
         if (farg) for (const auto& var : farg->GetVars()) obj->AddVar(var.Symbol());
         arg = farg;

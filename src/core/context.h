@@ -293,7 +293,10 @@ class Context {
       // Restore other signals
       RestoreSignals(tuple);
       for (rocprofiler_feature_t* rinfo : *(tuple.info_vector)) rinfo->data.kind = ROCPROFILER_DATA_KIND_UNINIT;
-      callback_data_t callback_data{tuple.profile, tuple.info_vector, tuple.info_vector->size(), NULL};
+      callback_data_t callback_data{tuple.profile, 
+                                    tuple.info_vector,
+                                    tuple.info_vector->size(),
+                                    NULL};
       const hsa_status_t status =
           api_->hsa_ven_amd_aqlprofile_iterate_data(tuple.profile, DataCallback, &callback_data);
       if (status != HSA_STATUS_SUCCESS) AQL_EXC_RAISING(status, "context iterate data failed");
@@ -384,6 +387,7 @@ class Context {
     }
 
     metrics_ = MetricsDict::Create(agent_info);
+
     if (metrics_ == NULL) EXC_RAISING(HSA_STATUS_ERROR, "MetricsDict create failed");
 
     if (Initialize(info, info_count) == false) {
@@ -439,6 +443,7 @@ class Context {
         const Metric* metric = metrics_->Get(name);
         if (metric == NULL)
           EXC_RAISING(HSA_STATUS_ERROR, "input metric '" << name << "' is not found");
+        
 #if 0
         std::cout << "    " << name << (metric->GetExpr() ? " = " + metric->GetExpr()->String() : " counter") << std::endl;
 #endif
@@ -447,7 +452,7 @@ class Context {
         counters_vec_t counters_vec = metric->GetCounters();
         if (counters_vec.empty())
           EXC_RAISING(HSA_STATUS_ERROR, "bad metric '" << name << "' is empty");
-
+        
         for (const counter_t* counter : counters_vec) {
           // For metrics expressions checking that there is no the same counter in the input metrics
           // and also that the counter wasn't registered already by another input metric expression
@@ -476,13 +481,18 @@ class Context {
             if (status != HSA_STATUS_SUCCESS) AQL_EXC_RAISING(status, "get block_counters info");
             block_status.max_counters = block_counters;
           }
-          if (block_status.counter_index >= block_status.max_counters) {
+          
+          if (block_status.counter_index >= block_status.max_counters && info->engine_number != 0) {
             return false;
 
             block_status.counter_index = 0;
             block_status.group_index += 1;
           }
-          block_status.counter_index += 1;
+
+          if (info->engine_number == 0) {
+            block_status.counter_index += 1;
+          }
+
           if (block_status.group_index >= set_.size()) {
             set_.push_back(Group(agent_info_, this, block_status.group_index));
           }
@@ -552,7 +562,10 @@ class Context {
 
       if (ainfo_type == HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA) {
         if (ainfo_data->sample_id == 0) rinfo->data.result_int64 = 0;
-        rinfo->data.result_int64 += ainfo_data->pmc_data.result;
+
+        if (rinfo->engine_number == ainfo_data->sample_id) {
+          rinfo->data.result_int64 += ainfo_data->pmc_data.result;
+        }
         rinfo->data.kind = ROCPROFILER_DATA_KIND_INT64;
       } else if (ainfo_type == HSA_VEN_AMD_AQLPROFILE_INFO_TRACE_DATA) {
         if (rinfo->data.result_bytes.copy) {
@@ -617,6 +630,7 @@ class Context {
     rocprofiler_feature_t* info = new rocprofiler_feature_t{};
     info->kind = ROCPROFILER_FEATURE_KIND_METRIC;
     info->name = counter->name.c_str();
+    info->engine_number = counter->engine_number;
     return info;
   }
 

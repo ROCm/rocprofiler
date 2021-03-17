@@ -140,6 +140,7 @@ typedef struct {
   const rocprofiler_parameter_t* parameters;  // feature parameters array
   uint32_t parameter_count;                   // feature parameters count
   rocprofiler_data_t data;                    // profiling data
+  uint32_t engine_number;
 } rocprofiler_feature_t;
 
 // Profiling features set type
