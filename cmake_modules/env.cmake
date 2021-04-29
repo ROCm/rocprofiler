@@ -90,7 +90,7 @@ endif()
 ## Extend Compiler flags based on build type
 string ( TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE )
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL debug )
-  set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb" )
+  set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -O0" )
   set ( CMAKE_BUILD_TYPE "debug" )
 else ()
   set ( CMAKE_BUILD_TYPE "release" )
