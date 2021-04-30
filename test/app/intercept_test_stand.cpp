@@ -151,7 +151,7 @@ hsa_status_t dispatch_callback(const rocprofiler_callback_data_t* callback_data,
 }
 
 int main() {
-  bool ret_val = false;
+  bool ret_val = true;
   const char* kiter_s = getenv("ROCP_KITER");
   const char* diter_s = getenv("ROCP_DITER");
   const unsigned kiter = (kiter_s != NULL) ? atol(kiter_s) : 1;
@@ -177,12 +177,11 @@ int main() {
   TestHsa::SetQueue(queue);
   TestHsa::HsaInstantiate(0);
 
-  for (unsigned ind = 0; ind < kiter; ++ind) {
-    printf("Iterastion %u:\n", ind);
+  for (unsigned ind = 0; ind < kiter && ret_val; ++ind) {
+    printf("Iteration %u:\n", ind);
     ret_val = RunKernel<DummyKernel, TestAql>(0, NULL, diter);
-    if (ret_val) ret_val = RunKernel<SimpleConvolution, TestAql>(0, NULL, diter);
+    if (ret_val) ret_val = RunKernel<SimpleConvolution, TestAql>(0, NULL, diter); 
   }
-
   TestHsa::HsaShutdown();
 
   return (ret_val) ? 0 : 1;

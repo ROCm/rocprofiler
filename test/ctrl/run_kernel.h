@@ -47,7 +47,8 @@ template <class Kernel, class Test> bool RunKernel(int argc = 0, char* argv[] = 
   ret_val = test_aql->Initialize(argc, argv);
   if (ret_val == false) {
     std::cerr << "Error in the test initialization" << std::endl;
-    // TEST_ASSERT(ret_val);
+    TEST_ASSERT(ret_val);
+    //delete test_aql;
     return false;
   }
 
@@ -59,6 +60,7 @@ template <class Kernel, class Test> bool RunKernel(int argc = 0, char* argv[] = 
     return false;
   }
 
+  bool result = true;
   // Kernel dspatch iterations
   for (int i = 0; i < count; ++i) {
     // Run test kernel
@@ -71,6 +73,7 @@ template <class Kernel, class Test> bool RunKernel(int argc = 0, char* argv[] = 
 
     // Verify the results of the execution
     ret_val = test_aql->VerifyResults();
+    result &= ret_val;
     if (ret_val) {
       std::clog << "Test : Passed" << std::endl;
     } else {
@@ -83,8 +86,7 @@ template <class Kernel, class Test> bool RunKernel(int argc = 0, char* argv[] = 
 
   test_aql->Cleanup();
   delete test_aql;
-
-  return ret_val;
+  return result;
 }
 
 #endif  // TEST_CTRL_RUN_KERNEL_H_

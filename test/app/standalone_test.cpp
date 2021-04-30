@@ -111,7 +111,7 @@ void read_features(uint32_t n, rocprofiler_t* context, rocprofiler_feature_t* fe
 }
 
 int main() {
-  bool ret_val = false;
+  bool ret_val = true;
   // HSA status
   hsa_status_t status = HSA_STATUS_ERROR;
   // Profiling context
@@ -183,7 +183,7 @@ int main() {
     const unsigned queue_ind = ind % queue_count;
     hsa_queue_t* prof_queue = queue[queue_ind];
     //ret_val = RunKernel<DummyKernel, TestAql>(0, NULL, NULL, prof_queue);
-    ret_val = RunKernel<SimpleConvolution, TestAql>(0, NULL, NULL, prof_queue);
+    ret_val &= RunKernel<SimpleConvolution, TestAql>(0, NULL, NULL, prof_queue);
     std::cout << "run kernel, queue " << queue_ind << std::endl;
 #else
     sleep(3);

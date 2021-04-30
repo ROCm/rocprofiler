@@ -176,7 +176,7 @@ int main() {
   // Test initialization
   TestHsa::HsaInstantiate();
 
-  for (unsigned ind = 0; ind < kiter; ++ind) {
+  for (unsigned ind = 0; ind < kiter && ret_val; ++ind) {
     printf("Iteration %u:\n", ind);
     if ((ind & 1) == 0) rocprofiler_start_queue_callbacks();
     else rocprofiler_stop_queue_callbacks();
@@ -185,6 +185,6 @@ int main() {
   }
 
   TestHsa::HsaShutdown();
-
+  
   return (ret_val) ? 0 : 1;
 }
