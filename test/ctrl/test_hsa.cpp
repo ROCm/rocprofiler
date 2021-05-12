@@ -70,11 +70,10 @@ bool TestHsa::Initialize(int /*arg_cnt*/, char** /*arg_list*/) {
   // Create an instance of Aql Queue
   if (hsa_queue_ == NULL) {
     const uint32_t num_pkts = 128;
-    if (hsa_rsrc_->CreateQueue(agent_info_, num_pkts, &hsa_queue_) == false) {
-      hsa_queue_ = NULL;
+    SetQueue(hsa_rsrc_->CreateQueue(agent_info_, num_pkts));
+    if (!GetQueue()) {  
       TEST_ASSERT(false);
     }
-    my_queue_ = true;
   }
 
   // Obtain handle of signal
@@ -207,7 +206,7 @@ bool TestHsa::Run() {
   hsa_timer_.StartTimer(dispatch_timer_idx_);
 
   // Submit AQL packet to the queue
-  const uint64_t que_idx = hsa_rsrc_->Submit(hsa_queue_, &aql);
+  const uint64_t que_idx = hsa_rsrc_->Submit(hsa_queue_.get(), &aql);
 
   std::clog << "> Waiting on kernel dispatch signal, que_idx=" << que_idx << std::endl << std::flush;
 
@@ -270,7 +269,6 @@ void TestHsa::PrintTime() {
 bool TestHsa::Cleanup() {
   hsa_executable_destroy(hsa_exec_);
   hsa_signal_destroy(hsa_signal_);
-  if (my_queue_) hsa_queue_destroy(hsa_queue_);
   hsa_queue_ = NULL;
   agent_info_ = NULL;
   return true;

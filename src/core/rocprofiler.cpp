@@ -576,7 +576,8 @@ PUBLIC_API hsa_status_t rocprofiler_open(hsa_agent_t agent, rocprofiler_feature_
   if (mode != 0) {
     if (mode & ROCPROFILER_MODE_STANDALONE) {
       if (mode & ROCPROFILER_MODE_CREATEQUEUE) {
-        if (hsa_rsrc->CreateQueue(agent_info, properties->queue_depth, &(properties->queue)) == false) {
+        properties->queue = hsa_rsrc->CreateQueue(agent_info, properties->queue_depth);
+        if (!properties->queue) {
           EXC_RAISING(HSA_STATUS_ERROR, "CreateQueue() failed");
         }
       }

@@ -439,17 +439,16 @@ bool HsaRsrcFactory::GetCpuAgentInfo(uint32_t idx, const AgentInfo** agent_info)
 //
 // @param num_Pkts Number of packets to be held by queue
 //
-// @param queue Output parameter updated with handle of queue object
+// @return pointer to queue if successful, nullptr otherwise
 //
-// @return bool true if successful, false otherwise
-//
-bool HsaRsrcFactory::CreateQueue(const AgentInfo* agent_info, uint32_t num_pkts,
-                                 hsa_queue_t** queue) {
+hsa_queue_t* HsaRsrcFactory::CreateQueue(const AgentInfo* agent_info, uint32_t num_pkts) {
   hsa_status_t status;
+  hsa_queue_t* result;
   status = hsa_api_.hsa_queue_create(agent_info->dev_id, num_pkts, HSA_QUEUE_TYPE_MULTI, NULL, NULL,
-                            UINT32_MAX, UINT32_MAX, queue);
-  return (status == HSA_STATUS_SUCCESS);
+                            UINT32_MAX, UINT32_MAX, &result);
+  return (status == HSA_STATUS_SUCCESS) ? result : nullptr;
 }
+
 
 // Create a Signal object and return its handle.
 // @param value Initial value of signal object

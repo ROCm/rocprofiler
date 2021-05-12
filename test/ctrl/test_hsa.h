@@ -27,6 +27,7 @@ THE SOFTWARE.
 #include "ctrl/test_kernel.h"
 #include "util/hsa_rsrc_factory.h"
 #include "util/perf_timer.h"
+#include <memory>
 
 // Class implements HSA test
 class TestHsa : public TestAql {
@@ -36,13 +37,11 @@ class TestHsa : public TestAql {
   static void HsaShutdown();
 
   // Constructor
-  explicit TestHsa(TestKernel* test) : test_(test), name_(test->Name()) {
+  explicit TestHsa(TestKernel* test) : test_(test), hsa_queue_(nullptr, &hsa_queue_destroy), name_(test->Name()) {
     total_time_taken_ = 0;
     setup_time_taken_ = 0;
     dispatch_time_taken_ = 0;
     agent_info_ = NULL;
-    hsa_queue_ = NULL;
-    my_queue_ = false;
     hsa_exec_ = {};
   }
 
@@ -51,8 +50,8 @@ class TestHsa : public TestAql {
   hsa_agent_t HsaAgent() { return agent_info_->dev_id; }
   const AgentInfo* GetAgentInfo() { return agent_info_; }
   void SetAgentInfo(const AgentInfo* agent_info) { agent_info_ = agent_info; }
-  hsa_queue_t* GetQueue() { return hsa_queue_; }
-  void SetQueue(hsa_queue_t* queue) { hsa_queue_ = queue; }
+  hsa_queue_t* GetQueue() { return hsa_queue_.get(); }
+  void SetQueue(hsa_queue_t* queue) { hsa_queue_.reset(queue); }
 
   // Initialize application environment including setting
   // up of various configuration parameters based on
@@ -113,8 +112,7 @@ class TestHsa : public TestAql {
   const AgentInfo* agent_info_;
 
   // Handle to an Hsa Queue
-  hsa_queue_t* hsa_queue_;
-  bool my_queue_;
+  std::unique_ptr<hsa_queue_t, decltype(&hsa_queue_destroy)> hsa_queue_;
 
   // Test kernel name
   std::string name_;

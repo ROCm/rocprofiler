@@ -158,8 +158,10 @@ int main() {
   const unsigned queue_count = 16;
   hsa_queue_t* queue[queue_count];
   for (unsigned queue_ind = 0; queue_ind < queue_count; ++queue_ind) {
-    if (HsaRsrcFactory::Instance().CreateQueue(agent_info, 128, &queue[queue_ind]) == false) abort();
+    queue[queue_ind] = HsaRsrcFactory::Instance().CreateQueue(agent_info, 128);
+    if (!queue[queue_ind]) abort();
   }
+
   hsa_queue_t* prof_queue = queue[0];
 
   // Creating profiling context
