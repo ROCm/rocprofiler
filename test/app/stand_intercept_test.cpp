@@ -171,7 +171,8 @@ int main() {
   if (HsaRsrcFactory::Instance().GetGpuAgentInfo(0, &agent_info) == false) abort();
 
   // Creating the queue
-  std::unique_ptr<hsa_queue_t, decltype(&hsa_queue_destroy)> queue(HsaRsrcFactory::Instance().CreateQueue(agent_info, 128), &hsa_queue_destroy);
+  std::unique_ptr<hsa_queue_t, decltype(&hsa_queue_destroy)> queue(
+      HsaRsrcFactory::Instance().CreateQueue(agent_info, 128), &hsa_queue_destroy);
   if (!queue) abort();
 
   // Test initialization

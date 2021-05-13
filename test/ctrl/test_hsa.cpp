@@ -70,14 +70,16 @@ bool TestHsa::Initialize(int /*arg_cnt*/, char** /*arg_list*/) {
   // Create an instance of Aql Queue
   if (hsa_queue_ == NULL) {
     const uint32_t num_pkts = 128;
-    SetQueue(hsa_rsrc_->CreateQueue(agent_info_, num_pkts));
-    if (!GetQueue()) {  
+    hsa_queue_ = hsa_rsrc_->CreateQueue(agent_info_, num_pkts);
+    if (!hsa_queue_) {
       TEST_ASSERT(false);
     }
+    my_queue_ = true;
   }
 
   // Obtain handle of signal
   hsa_rsrc_->CreateSignal(1, &hsa_signal_);
+  signal_set_ = true;
 
   // Obtain the code object file name
   std::string agentName(agent_info_->name);
@@ -101,6 +103,7 @@ bool TestHsa::Setup() {
     std::cerr << "Error in loading and finalizing Kernel" << std::endl;
     return false;
   }
+  executable_set_ = true;
 
   mem_map_t& mem_map = test_->GetMemMap();
   for (mem_it_t it = mem_map.begin(); it != mem_map.end(); ++it) {
@@ -206,7 +209,7 @@ bool TestHsa::Run() {
   hsa_timer_.StartTimer(dispatch_timer_idx_);
 
   // Submit AQL packet to the queue
-  const uint64_t que_idx = hsa_rsrc_->Submit(hsa_queue_.get(), &aql);
+  const uint64_t que_idx = hsa_rsrc_->Submit(hsa_queue_, &aql);
 
   std::clog << "> Waiting on kernel dispatch signal, que_idx=" << que_idx << std::endl << std::flush;
 
@@ -267,8 +270,9 @@ void TestHsa::PrintTime() {
 }
 
 bool TestHsa::Cleanup() {
-  hsa_executable_destroy(hsa_exec_);
-  hsa_signal_destroy(hsa_signal_);
+  if (executable_set_) hsa_executable_destroy(hsa_exec_);
+  if (signal_set_) hsa_signal_destroy(hsa_signal_);
+  if (my_queue_) hsa_queue_destroy(hsa_queue_);
   hsa_queue_ = NULL;
   agent_info_ = NULL;
   return true;
