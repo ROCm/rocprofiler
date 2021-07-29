@@ -4,7 +4,7 @@ ROC profiler library. Profiling with perf-counters and derived metrics. Library 
 HW specific low-level performance analysis interface for profiling of GPU compute applications. The
 profiling includes HW performance counters with complex performance metrics.
 
-To use the rocProfiler API you need the API header and to link your application with roctracer .so librray:
+To use the rocProfiler API you need the API header and to link your application with roctracer .so libraray:
  - the API header: /opt/rocm/rocprofiler/include/rocprofiler.h
  - the .so library: /opt/rocm/lib/librocprofiler64.so
 
@@ -30,7 +30,7 @@ To use the rocProfiler API you need the API header and to link your application 
    - tool - Profiling tool
      - tool.cpp - tool sources
      - metrics.xml - metrics config file
-   - ctrl - Test controll
+   - ctrl - Test control
    - util - Test utils
    - simple_convolution - Simple convolution test kernel
 ```
@@ -143,12 +143,12 @@ Options:
       ... - The columns with the counters values per kernel dispatch
       DispatchNs/BeginNs/EndNs/CompleteNs - timestamp columns if time-stamping was enabled
       
-  -d <data directory> - directory where profiler store profiling data including thread treaces [/tmp]
-      The data directory is renoving autonatically if the directory is matching the temporary one, which is the default.
+  -d <data directory> - directory where profiler stores profiling data including thread traces [/tmp]
+      The data directory is removed automatically if the directory matches the temporary one, which is the default.
   -t <temporary directory> - to change the temporary directory [/tmp]
       By changing the temporary directory you can prevent removing the profiling data from /tmp or enable removing from not '/tmp' directory.
 
-  --basenames <on|off> - to turn on/off truncating of the kernel full function names till the base ones [off]
+  --basenames <on|off> - to turn on/off truncation of the kernel full function names to the base ones [off]
   --timestamp <on|off> - to turn on/off the kernel dispatches timestamps, dispatch/begin/end/complete [off]
     Four kernel timestamps in nanoseconds are reported:
         DispatchNs - the time when the kernel AQL dispatch packet was written to the queue
@@ -158,7 +158,7 @@ Options:
 
   --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]
   --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]
-  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [on]
+  --obj-tracking <on|off> - to turn on/off kernel code object tracking [on]
     To support V3 code-object.
 
   --stats - generating kernel execution stats, file <output name>.stats.csv
@@ -183,7 +183,7 @@ Options:
     Supported time formats: <number(m|s|ms|us)>
 
 Configuration file:
-  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:$HOME:<package path>
+  You can set your parameters' default preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:$HOME:<package path>
   First the configuration file is looking in the current directory, then in your home, and then in the package directory.
   Configurable options: 'basenames', 'timestamp', 'ctx-limit', 'heartbeat', 'obj-tracking'.
   An example of 'rpl_rc.xml':
