@@ -337,19 +337,21 @@ unsigned align_size(unsigned size, unsigned alignment) {
   return ((size + alignment - 1) & ~(alignment - 1));
 }
 
+void metric_flush_cb(const char *name, uint64_t result){
+  fprintf(result_file_handle, "  %s ", name);
+  fprintf(result_file_handle, "(%lu)\n", result);
+}
 // Output profiling results for input features
 void output_results(const context_entry_t* entry, const char* label) {
-  FILE* file = entry->file_handle;
   const rocprofiler_feature_t* features = entry->features;
   const unsigned feature_count = entry->feature_count;
 
   for (unsigned i = 0; i < feature_count; ++i) {
     const rocprofiler_feature_t* p = &features[i];
-    fprintf(file, "  %s ", p->name);
     switch (p->data.kind) {
       // Output metrics results
       case ROCPROFILER_DATA_KIND_INT64:
-        fprintf(file, "(%lu)\n", p->data.result_int64);
+        metric_flush_cb(p->name, p->data.result_int64);
         break;
       default:
         fprintf(stderr, "RPL-tool: undefined data kind(%u)\n", p->data.kind);
