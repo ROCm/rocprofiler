@@ -1108,7 +1108,6 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
 
   // Getting traces
   const auto traces_list = xml->GetNodes("top.trace");
-  if (traces_list.size() > 1) fatal("ROCProfiler: only one trace supported at a time");
 
   const unsigned feature_count = metrics_vec.size() + traces_list.size();
   rocprofiler_feature_t* features = new rocprofiler_feature_t[feature_count];
