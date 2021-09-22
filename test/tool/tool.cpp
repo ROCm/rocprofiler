@@ -373,6 +373,53 @@ void output_group(const context_entry_t* entry, const char* label) {
   }
 }
 
+void kernel_flush_cb(	uint32_t dispatch,
+  uint32_t gpu_id,
+  uint32_t queue_id,
+  uint64_t queue_index,
+  uint32_t pid,
+  uint32_t tid,
+  uint32_t grid_size,
+  uint32_t workgroup_size,
+  uint32_t lds_size,
+  uint32_t scratch_size,
+  uint32_t vgpr,
+  uint32_t sgpr,
+  uint32_t fbarrier_count,
+  uint64_t signal_handle,
+  uint64_t object,
+  const char* kernel_name,
+  bool record,
+  uint64_t dispatch_time,
+  uint64_t begin,
+  uint64_t end,
+  uint64_t complete){
+  fprintf(result_file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), obj(0x%lx), kernel-name(\"%s\")",
+    dispatch,
+    gpu_id,
+    queue_id,
+    queue_index,
+    pid,
+    tid,
+    grid_size,
+    workgroup_size,
+    lds_size,
+    scratch_size,
+    vgpr,
+    sgpr,
+    fbarrier_count,
+    signal_handle,
+    object,
+    kernel_name);
+  if (record) fprintf(result_file_handle, ", time(%lu,%lu,%lu,%lu)",
+    dispatch_time,
+    begin,
+    end,
+    complete);
+  fprintf(result_file_handle, "\n");
+  fflush(result_file_handle);
+}
+
 // Dump stored context entry
 bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
   hsa_status_t status = HSA_STATUS_ERROR;
@@ -391,12 +438,9 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
 
   const uint32_t index = entry->index;
   if (index != UINT32_MAX) {
-    FILE* file_handle = entry->file_handle;
     const std::string nik_name = (to_truncate_names == 0) ? entry->data.kernel_name : filtr_kernel_name(entry->data.kernel_name);
     const AgentInfo* agent_info = HsaRsrcFactory::Instance().GetAgentInfo(entry->agent);
-
-    fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), obj(0x%lx), kernel-name(\"%s\")",
-      index,
+    kernel_flush_cb(index,
       agent_info->dev_index,
       entry->data.queue_id,
       entry->data.queue_index,
@@ -411,14 +455,12 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
       entry->kernel_properties.fbarrier_count,
       entry->kernel_properties.signal.handle,
       entry->kernel_properties.object,
-      nik_name.c_str());
-    if (record) fprintf(file_handle, ", time(%lu,%lu,%lu,%lu)",
-      record->dispatch,
-      record->begin,
-      record->end,
-      record->complete);
-    fprintf(file_handle, "\n");
-    fflush(file_handle);
+      nik_name.c_str(),
+      record != NULL ? true : false,
+      record != NULL ? record->dispatch: 0,
+      record != NULL ? record->begin : 0,
+      record != NULL ? record->end : 0,
+      record != NULL ? record->complete : 0);
   }
   if (record && to_clean) {
     delete record;
