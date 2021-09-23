@@ -49,6 +49,7 @@ THE SOFTWARE.
 #include <vector>
 
 #include "inc/rocprofiler.h"
+#include "inc/rocprofiler_trace_entries.h"
 #include "util/hsa_rsrc_factory.h"
 #include "util/xml.h"
 
@@ -336,12 +337,6 @@ struct trace_data_arg_t {
 unsigned align_size(unsigned size, unsigned alignment) {
   return ((size + alignment - 1) & ~(alignment - 1));
 }
-
-struct metric_trace_entry_t {
-  uint32_t dispatch;
-  const char* name;
-  uint64_t result;
-};
 
 void metric_flush_cb(metric_trace_entry_t *entry){
   fprintf(result_file_handle, "  %s ", entry->name);
