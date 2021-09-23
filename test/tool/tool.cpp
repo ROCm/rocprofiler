@@ -337,19 +337,29 @@ unsigned align_size(unsigned size, unsigned alignment) {
   return ((size + alignment - 1) & ~(alignment - 1));
 }
 
+struct metric_trace_entry_t {
+  uint32_t dispatch;
+  const char* name;
+  uint64_t result;
+};
+
+void metric_flush_cb(metric_trace_entry_t *entry){
+  fprintf(result_file_handle, "  %s ", entry->name);
+  fprintf(result_file_handle, "(%lu)\n", entry->result);
+}
 // Output profiling results for input features
 void output_results(const context_entry_t* entry, const char* label) {
-  FILE* file = entry->file_handle;
   const rocprofiler_feature_t* features = entry->features;
   const unsigned feature_count = entry->feature_count;
 
   for (unsigned i = 0; i < feature_count; ++i) {
     const rocprofiler_feature_t* p = &features[i];
-    fprintf(file, "  %s ", p->name);
     switch (p->data.kind) {
       // Output metrics results
-      case ROCPROFILER_DATA_KIND_INT64:
-        fprintf(file, "(%lu)\n", p->data.result_int64);
+      case ROCPROFILER_DATA_KIND_INT64: {
+        metric_trace_entry_t metric_trace_entry = {entry->index, p->name, p->data.result_int64};
+        metric_flush_cb(&metric_trace_entry);
+      }
         break;
       default:
         fprintf(stderr, "RPL-tool: undefined data kind(%u)\n", p->data.kind);
@@ -371,6 +381,57 @@ void output_group(const context_entry_t* entry, const char* label) {
   }
 }
 
+struct kernel_trace_entry_t {
+  uint32_t dispatch;
+  uint32_t gpu_id;
+  uint32_t queue_id;
+  uint64_t queue_index;
+  uint32_t pid;
+  uint32_t tid;
+  uint32_t grid_size;
+  uint32_t workgroup_size;
+  uint32_t lds_size;
+  uint32_t scratch_size;
+  uint32_t vgpr;
+  uint32_t sgpr;
+  uint32_t fbarrier_count;
+  uint64_t signal_handle;
+  uint64_t object;
+  const char* kernel_name;
+  bool record;
+  uint64_t dispatch_time;
+  uint64_t begin;
+  uint64_t end;
+  uint64_t complete;
+};
+
+void kernel_flush_cb(kernel_trace_entry_t* entry){
+  fprintf(result_file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), obj(0x%lx), kernel-name(\"%s\")",
+    entry->dispatch,
+    entry->gpu_id,
+    entry->queue_id,
+    entry->queue_index,
+    entry->pid,
+    entry->tid,
+    entry->grid_size,
+    entry->workgroup_size,
+    entry->lds_size,
+    entry->scratch_size,
+    entry->vgpr,
+    entry->sgpr,
+    entry->fbarrier_count,
+    entry->signal_handle,
+    entry->object,
+    entry->kernel_name);
+  if (entry->record) fprintf(result_file_handle, ", time(%lu,%lu,%lu,%lu)",
+    entry->dispatch_time,
+    entry->begin,
+    entry->end,
+    entry->complete);
+  fprintf(result_file_handle, "\n");
+  fflush(result_file_handle);
+}
+
 // Dump stored context entry
 bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
   hsa_status_t status = HSA_STATUS_ERROR;
@@ -389,15 +450,12 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
 
   const uint32_t index = entry->index;
   if (index != UINT32_MAX) {
-    FILE* file_handle = entry->file_handle;
     const std::string nik_name = (to_truncate_names == 0) ? entry->data.kernel_name : filtr_kernel_name(entry->data.kernel_name);
     const AgentInfo* agent_info = HsaRsrcFactory::Instance().GetAgentInfo(entry->agent);
-
-    fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), obj(0x%lx), kernel-name(\"%s\")",
-      index,
+    kernel_trace_entry_t kernel_trace_entry = {entry->index,
       agent_info->dev_index,
       entry->data.queue_id,
-      entry->data.queue_index,
+      entry->data.queue_index, 
       my_pid,
       entry->data.thread_id,
       entry->kernel_properties.grid_size,
@@ -409,14 +467,13 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
       entry->kernel_properties.fbarrier_count,
       entry->kernel_properties.signal.handle,
       entry->kernel_properties.object,
-      nik_name.c_str());
-    if (record) fprintf(file_handle, ", time(%lu,%lu,%lu,%lu)",
-      record->dispatch,
-      record->begin,
-      record->end,
-      record->complete);
-    fprintf(file_handle, "\n");
-    fflush(file_handle);
+      nik_name.c_str(),
+      record != NULL ? true : false,
+      record != NULL ? record->dispatch: 0,
+      record != NULL ? record->begin : 0,
+      record != NULL ? record->end : 0,
+      record != NULL ? record->complete : 0};    
+    kernel_flush_cb(&kernel_trace_entry);
   }
   if (record && to_clean) {
     delete record;
@@ -1108,7 +1165,6 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
 
   // Getting traces
   const auto traces_list = xml->GetNodes("top.trace");
-  if (traces_list.size() > 1) fatal("ROCProfiler: only one trace supported at a time");
 
   const unsigned feature_count = metrics_vec.size() + traces_list.size();
   rocprofiler_feature_t* features = new rocprofiler_feature_t[feature_count];
