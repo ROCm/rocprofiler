@@ -337,9 +337,15 @@ unsigned align_size(unsigned size, unsigned alignment) {
   return ((size + alignment - 1) & ~(alignment - 1));
 }
 
-void metric_flush_cb(const char *name, uint64_t result){
-  fprintf(result_file_handle, "  %s ", name);
-  fprintf(result_file_handle, "(%lu)\n", result);
+struct metric_trace_entry_t {
+  uint32_t dispatch;
+  const char* name;
+  uint64_t result;
+};
+
+void metric_flush_cb(metric_trace_entry_t *entry){
+  fprintf(result_file_handle, "  %s ", entry->name);
+  fprintf(result_file_handle, "(%lu)\n", entry->result);
 }
 // Output profiling results for input features
 void output_results(const context_entry_t* entry, const char* label) {
@@ -350,8 +356,10 @@ void output_results(const context_entry_t* entry, const char* label) {
     const rocprofiler_feature_t* p = &features[i];
     switch (p->data.kind) {
       // Output metrics results
-      case ROCPROFILER_DATA_KIND_INT64:
-        metric_flush_cb(p->name, p->data.result_int64);
+      case ROCPROFILER_DATA_KIND_INT64: {
+        metric_trace_entry_t metric_trace_entry = {entry->index, p->name, p->data.result_int64};
+        metric_flush_cb(&metric_trace_entry);
+      }
         break;
       default:
         fprintf(stderr, "RPL-tool: undefined data kind(%u)\n", p->data.kind);
