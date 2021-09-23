@@ -381,49 +381,53 @@ void output_group(const context_entry_t* entry, const char* label) {
   }
 }
 
-void kernel_flush_cb(	uint32_t dispatch,
-  uint32_t gpu_id,
-  uint32_t queue_id,
-  uint64_t queue_index,
-  uint32_t pid,
-  uint32_t tid,
-  uint32_t grid_size,
-  uint32_t workgroup_size,
-  uint32_t lds_size,
-  uint32_t scratch_size,
-  uint32_t vgpr,
-  uint32_t sgpr,
-  uint32_t fbarrier_count,
-  uint64_t signal_handle,
-  uint64_t object,
-  const char* kernel_name,
-  bool record,
-  uint64_t dispatch_time,
-  uint64_t begin,
-  uint64_t end,
-  uint64_t complete){
+struct kernel_trace_entry_t {
+  uint32_t dispatch;
+  uint32_t gpu_id;
+  uint32_t queue_id;
+  uint64_t queue_index;
+  uint32_t pid;
+  uint32_t tid;
+  uint32_t grid_size;
+  uint32_t workgroup_size;
+  uint32_t lds_size;
+  uint32_t scratch_size;
+  uint32_t vgpr;
+  uint32_t sgpr;
+  uint32_t fbarrier_count;
+  uint64_t signal_handle;
+  uint64_t object;
+  const char* kernel_name;
+  bool record;
+  uint64_t dispatch_time;
+  uint64_t begin;
+  uint64_t end;
+  uint64_t complete;
+};
+
+void kernel_flush_cb(kernel_trace_entry_t* entry){
   fprintf(result_file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), obj(0x%lx), kernel-name(\"%s\")",
-    dispatch,
-    gpu_id,
-    queue_id,
-    queue_index,
-    pid,
-    tid,
-    grid_size,
-    workgroup_size,
-    lds_size,
-    scratch_size,
-    vgpr,
-    sgpr,
-    fbarrier_count,
-    signal_handle,
-    object,
-    kernel_name);
-  if (record) fprintf(result_file_handle, ", time(%lu,%lu,%lu,%lu)",
-    dispatch_time,
-    begin,
-    end,
-    complete);
+    entry->dispatch,
+    entry->gpu_id,
+    entry->queue_id,
+    entry->queue_index,
+    entry->pid,
+    entry->tid,
+    entry->grid_size,
+    entry->workgroup_size,
+    entry->lds_size,
+    entry->scratch_size,
+    entry->vgpr,
+    entry->sgpr,
+    entry->fbarrier_count,
+    entry->signal_handle,
+    entry->object,
+    entry->kernel_name);
+  if (entry->record) fprintf(result_file_handle, ", time(%lu,%lu,%lu,%lu)",
+    entry->dispatch_time,
+    entry->begin,
+    entry->end,
+    entry->complete);
   fprintf(result_file_handle, "\n");
   fflush(result_file_handle);
 }
@@ -448,10 +452,10 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
   if (index != UINT32_MAX) {
     const std::string nik_name = (to_truncate_names == 0) ? entry->data.kernel_name : filtr_kernel_name(entry->data.kernel_name);
     const AgentInfo* agent_info = HsaRsrcFactory::Instance().GetAgentInfo(entry->agent);
-    kernel_flush_cb(index,
+    kernel_trace_entry_t kernel_trace_entry = {entry->index,
       agent_info->dev_index,
       entry->data.queue_id,
-      entry->data.queue_index,
+      entry->data.queue_index, 
       my_pid,
       entry->data.thread_id,
       entry->kernel_properties.grid_size,
@@ -468,7 +472,8 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
       record != NULL ? record->dispatch: 0,
       record != NULL ? record->begin : 0,
       record != NULL ? record->end : 0,
-      record != NULL ? record->complete : 0);
+      record != NULL ? record->complete : 0};    
+    kernel_flush_cb(&kernel_trace_entry);
   }
   if (record && to_clean) {
     delete record;
