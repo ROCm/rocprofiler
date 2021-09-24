@@ -37,6 +37,7 @@ THE SOFTWARE.
 #include <sys/syscall.h>   /* For SYS_xxx definitions */
 #include <sys/types.h>
 #include <unistd.h>
+#include <dlfcn.h>
 
 #include <atomic>
 #include <chrono>
@@ -152,6 +153,12 @@ static inline uint32_t GetPid() { return syscall(__NR_getpid); }
 static inline uint32_t GetTid() { return syscall(__NR_gettid); }
 
 uint32_t my_pid = GetPid();
+
+//Plugins objects
+void* dl_handle;
+void (*init_plugin_lib)(const char*, std::vector<std::string>);
+void (*close_plugin_lib)();
+bool output_plugin_enabled = false;
 
 // Error handler
 void fatal(const std::string msg) {
@@ -985,6 +992,35 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
     rcpath = std::string(pkg_dir) + "/" + rcfile_name;
     rcfile = xml::Xml::Create(rcpath);
   }
+
+  //Load output plugin if enabled
+  const char* plugin_lib = getenv("PLUGIN_LIB");
+  if(plugin_lib != NULL){
+    if (std::string(plugin_lib).find("enabled") != std::string::npos) {
+      output_plugin_enabled = true;
+      const char* rocprofiler_plugin_lib = getenv("ROCPROFILER_PLUGIN_LIB");
+      if(rocprofiler_plugin_lib){  
+        dl_handle = dlopen(rocprofiler_plugin_lib, RTLD_LAZY);
+        if (!dl_handle) {
+          printf("error: %s\n", dlerror());
+          abort();
+        }
+        
+        init_plugin_lib = (void (*)(const char* prefix, std::vector<std::string> metrics_vector))dlsym(dl_handle, "init_plugin_lib");  
+        if (!init_plugin_lib) {
+          printf("error: %s\n", dlerror());
+          abort();
+        }			
+        
+        close_plugin_lib = (void (*)())dlsym(dl_handle, "close_plugin_lib");
+        if (!close_plugin_lib) {
+          printf("error: %s\n", dlerror());
+          abort();	
+        }			
+      }
+      
+    }
+  }
   if (rcfile != NULL) {
     // Getting defaults
     printf("ROCProfiler pid(%u): rc-file '%s'\n", GetPid(), rcpath.c_str());
@@ -1111,6 +1147,11 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
       accum += *it;
       *it = accum;
     }
+  }
+
+  //Initialize the plugin if needed once the metrics have been registered
+  if(output_plugin_enabled){
+    init_plugin_lib(result_prefix, metrics_vec);
   }
 
   // Getting GPU indexes
@@ -1292,6 +1333,12 @@ void rocprofiler_unload(bool is_destr) {
   range_vec = NULL;
   delete context_array;
   context_array = NULL;
+
+  //Close the plugin and unload the library if plugin was used
+  if(output_plugin_enabled){
+    close_plugin_lib();
+    dlclose(dl_handle);
+  } 
 
   ONLOAD_TRACE_END();
 }
