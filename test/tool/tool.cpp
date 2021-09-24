@@ -385,6 +385,7 @@ void output_group(const context_entry_t* entry, const char* label) {
   }
 }
 
+void (*kernel_flush_cb_ptr)(kernel_trace_entry_t *entry);
 void kernel_flush_cb(kernel_trace_entry_t* entry){
   fprintf(result_file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), obj(0x%lx), kernel-name(\"%s\")",
     entry->dispatch,
@@ -453,7 +454,7 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
       record != NULL ? record->begin : 0,
       record != NULL ? record->end : 0,
       record != NULL ? record->complete : 0};    
-    kernel_flush_cb(&kernel_trace_entry);
+    kernel_flush_cb_ptr(&kernel_trace_entry);
   }
   if (record && to_clean) {
     delete record;
@@ -1025,6 +1026,12 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
       if (!metric_flush_cb_ptr) {
         printf("error: %s\n", dlerror());
         abort();
+      }
+      
+      kernel_flush_cb_ptr = (void (*)(kernel_trace_entry_t *entry))dlsym(dl_handle, "kernel_flush_cb");  
+      if (!kernel_flush_cb_ptr) {
+        printf("error: %s\n", dlerror());
+        abort();
       }	
       
     }
@@ -1032,6 +1039,7 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
 
   if(!output_plugin_enabled){
     metric_flush_cb_ptr = metric_flush_cb;
+    kernel_flush_cb_ptr = kernel_flush_cb;
   } 
   if (rcfile != NULL) {
     // Getting defaults
@@ -1122,14 +1130,16 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
       perror(errmsg.str().c_str());
       abort();
     }
-    std::ostringstream oss;
-    oss << result_prefix << "/" << GetPid() << "_results.txt";
-    result_file_handle = fopen(oss.str().c_str(), "w");
-    if (result_file_handle == NULL) {
-      std::ostringstream errmsg;
-      errmsg << "ROCProfiler: fopen error, file '" << oss.str().c_str() << "'";
-      perror(errmsg.str().c_str());
-      abort();
+    if(!output_plugin_enabled){
+      std::ostringstream oss;
+      oss << result_prefix << "/" << GetPid() << "_results.txt";
+      result_file_handle = fopen(oss.str().c_str(), "w");
+      if (result_file_handle == NULL) {
+        std::ostringstream errmsg;
+        errmsg << "ROCProfiler: fopen error, file '" << oss.str().c_str() << "'";
+        perror(errmsg.str().c_str());
+        abort();
+      }
     }
   } else result_file_handle = stdout;
 
