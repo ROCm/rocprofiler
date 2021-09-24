@@ -50,6 +50,7 @@ KFD_TRACE=0
 HSA_TRACE=0
 SYS_TRACE=0
 HIP_TRACE=0
+OUTPUT_PLUGIN=0
 
 # Generate stats
 GEN_STATS=0
@@ -185,6 +186,7 @@ usage() {
   echo "        </parameters>"
   echo "      </trace>"
   echo ""
+  echo "  --output-plugin <plugin directory> - to enable the use of a plugin"
   echo "  --trace-start <on|off> - to enable tracing on start [on]"
   echo "  --trace-period <dealy:length:rate> - to enable trace with initial delay, with periodic sample length and rate"
   echo "    Supported time formats: <number(m|s|ms|us)>"
@@ -263,6 +265,20 @@ run() {
     OUTPUT_LIST="$OUTPUT_LIST $ROCP_OUTPUT_DIR/results.txt"
   fi
 
+  if [ $OUTPUT_PLUGIN = 1 ] ; then
+    if [ ! -e "$PLUGIN_PATH" ] ; then
+      error "'$PLUGIN_PATH' directory does not exist"
+    fi
+    if [ ! -f "$PLUGIN_PATH/rocprofiler_plugin_lib.so" ] ; then
+      error "Could not find rocprofiler_plugin_lib.so library at '$PLUGIN_PATH'"
+    fi
+    if [ ! -e "$PLUGIN_PATH/roctracer_plugin_lib.so" ] ; then
+      error "Could not find roctracer_plugin_lib.so library at '$PLUGIN_PATH'"
+    fi    
+    export PLUGIN_LIB="enabled"
+    export ROCPROFILER_PLUGIN_LIB="$PLUGIN_PATH/rocprofiler_plugin_lib.so"
+    export ROCTRACER_PLUGIN_LIB="$PLUGIN_PATH/roctracer_plugin_lib.so"
+  fi
   API_TRACE=""
   MY_LD_PRELOAD=""
   if [ "$ROCTX_TRACE" = 1 ] ; then
@@ -436,6 +452,9 @@ while [ 1 ] ; do
     export ROCP_TIMESTAMP_ON=1
     GEN_STATS=1
     HIP_TRACE=1
+  elif [ "$1" = "--output-plugin" ] ; then
+    OUTPUT_PLUGIN=1
+    PLUGIN_PATH="$2"
   elif [ "$1" = "--trace-start" ] ; then
     if [ "$2" = "off" ] ; then
       export ROCP_CTRL_RATE="-1"
