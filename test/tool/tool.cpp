@@ -345,10 +345,12 @@ unsigned align_size(unsigned size, unsigned alignment) {
   return ((size + alignment - 1) & ~(alignment - 1));
 }
 
+void (*metric_flush_cb_ptr)(metric_trace_entry_t *entry);
 void metric_flush_cb(metric_trace_entry_t *entry){
   fprintf(result_file_handle, "  %s ", entry->name);
   fprintf(result_file_handle, "(%lu)\n", entry->result);
 }
+
 // Output profiling results for input features
 void output_results(const context_entry_t* entry, const char* label) {
   const rocprofiler_feature_t* features = entry->features;
@@ -360,7 +362,7 @@ void output_results(const context_entry_t* entry, const char* label) {
       // Output metrics results
       case ROCPROFILER_DATA_KIND_INT64: {
         metric_trace_entry_t metric_trace_entry = {entry->index, p->name, p->data.result_int64};
-        metric_flush_cb(&metric_trace_entry);
+        metric_flush_cb_ptr(&metric_trace_entry);
       }
         break;
       default:
@@ -1018,9 +1020,19 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
           abort();	
         }			
       }
+
+      metric_flush_cb_ptr = (void (*)(metric_trace_entry_t *entry))dlsym(dl_handle, "metric_flush_cb");  
+      if (!metric_flush_cb_ptr) {
+        printf("error: %s\n", dlerror());
+        abort();
+      }	
       
     }
   }
+
+  if(!output_plugin_enabled){
+    metric_flush_cb_ptr = metric_flush_cb;
+  } 
   if (rcfile != NULL) {
     // Getting defaults
     printf("ROCProfiler pid(%u): rc-file '%s'\n", GetPid(), rcpath.c_str());
