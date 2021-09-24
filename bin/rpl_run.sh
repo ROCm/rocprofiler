@@ -276,6 +276,7 @@ run() {
       error "Could not find roctracer_plugin_lib.so library at '$PLUGIN_PATH'"
     fi    
     export PLUGIN_LIB="enabled"
+    export PLUGIN_PATH
     export ROCPROFILER_PLUGIN_LIB="$PLUGIN_PATH/rocprofiler_plugin_lib.so"
     export ROCTRACER_PLUGIN_LIB="$PLUGIN_PATH/roctracer_plugin_lib.so"
   fi
