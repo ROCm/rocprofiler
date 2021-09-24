@@ -145,10 +145,12 @@ install ( TARGETS ${ROCPROFILER_TARGET} LIBRARY DESTINATION ${DEST_NAME}/lib )
 install ( FILES
           ${CMAKE_CURRENT_SOURCE_DIR}/inc/rocprofiler.h
           ${CMAKE_CURRENT_SOURCE_DIR}/src/core/activity.h
+          ${CMAKE_CURRENT_SOURCE_DIR}/inc/rocprofiler_trace_entries.h
           DESTINATION ${DEST_NAME}/include )
 install ( FILES
           ${CMAKE_CURRENT_SOURCE_DIR}/inc/rocprofiler.h
           ${CMAKE_CURRENT_SOURCE_DIR}/src/core/activity.h
+          ${CMAKE_CURRENT_SOURCE_DIR}/inc/rocprofiler_trace_entries.h
           DESTINATION include/${DEST_NAME} )
 # rpl_run.sh tblextr.py txt2xml.sh
 install ( FILES
