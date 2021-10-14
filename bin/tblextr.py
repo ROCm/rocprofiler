@@ -391,7 +391,6 @@ def fill_api_db(table_name, db, indir, api_name, api_pid, dep_pid, dep_list, dep
       line_index += 1
 
       record = line[:-1]
-
       corr_id = 0
       m = ptrn_corr_id.search(record)
       if m:
@@ -478,6 +477,7 @@ def fill_api_db(table_name, db, indir, api_name, api_pid, dep_pid, dep_list, dep
         # asyncronous opeartion API found
         op_found = 0
         mcopy_found = 0
+        hsa_mcopy_found = 0
 
         # extract kernel name string
         (kernel_str, kernel_found) = get_field(record_args, 'kernel')
@@ -496,10 +496,10 @@ def fill_api_db(table_name, db, indir, api_name, api_pid, dep_pid, dep_list, dep
         if hsa_mcopy_ptrn.match(record_name):
           mcopy_found = 1
           op_found = 1
+          hsa_mcopy_found = 1
 
           stream_id = thread_id
           hsa_patch_data[(copy_index, proc_id)] = thread_id
-          copy_index += 1
 
         if op_found:
           ops_patch_data[(corr_id, proc_id)] = (thread_id, stream_id, kernel_str)
@@ -521,7 +521,12 @@ def fill_api_db(table_name, db, indir, api_name, api_pid, dep_pid, dep_list, dep
             if expl_id: dep_str['id'].append(corr_id)
 
         # memcopy registering
-        api_data = memory_manager.register_api(rec_vals) if mcopy_data_enabled else ''
+        if hsa_mcopy_found:
+          api_data = memory_manager.register_api(rec_vals, copy_index) if mcopy_data_enabled else ''
+          copy_index += 1
+        else:
+          api_data = memory_manager.register_api(rec_vals, corr_id) if mcopy_data_enabled else ''
+        
         rec_vals.append(api_data)
 
         # setting section and lane
@@ -647,7 +652,7 @@ def fill_ops_db(kernel_table_name, mcopy_table_name, db, indir):
         name = m.group(1)
         corr_id = int(m.group(2))
         proc_id = int(m.group(3))
-
+        
         # checking name for memcopy pattern
         is_barrier = 0
         if ptrn_mcopy.search(name):
