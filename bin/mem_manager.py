@@ -24,7 +24,7 @@ import sys, os, re
 from sqlitedb import SQLiteDB
 
 pinned = ['hipMallocHost', 'hipHostMalloc', 'hipHostAlloc']
-ondevice = ['hipMalloc', 'hipMallocPitch', 'hipMallocArray', 'hipMalloc3DArray']
+ondevice = ['hipMalloc', 'hipMallocPitch', 'hipMallocArray', 'hipMalloc3DArray', 'hsa_amd_memory_pool_allocate']
 
 mm_table_descr = [
   ['BeginNs', 'EndNs', 'pid', 'tid', 'Name', 'Direction', 'SrcType', 'DstType', 'Size', 'BW', 'Async'],
@@ -36,6 +36,33 @@ def fatal(msg):
   sys.exit(1)
 
 DELIM = ','
+
+class MemManagerRecord:
+  def __init__(self):
+    self.start_time = 0
+    self.end_time = 0
+    self.pid = 0
+    self.tid = 0
+    self.event = ''
+    self.direction = ''
+    self.srcptr_type = ''
+    self.dstptr_type = ''
+    self.size = 0
+    self.bandwidth = 0
+    self.is_async = False
+    
+  def str(self):
+    return str(self.start_time) + DELIM \
+            + str(self.end_time) + DELIM \
+            + str(self.pid) + DELIM \
+            + str(self.tid)  + DELIM \
+            + self.event + DELIM \
+            + 'Direction=' + self.direction + DELIM \
+            + 'SrcType=' + self.srcptr_type + DELIM \
+            + 'DstType=' + self.dstptr_type + DELIM \
+            + 'Size=' + str(self.size) + DELIM \
+            + 'BW=' + str(self.bandwidth) + DELIM \
+            + 'Async=' + str(self.is_async)
 
 # Mem copy manager class
 class MemManager:
@@ -69,9 +96,12 @@ class MemManager:
 
   # register alloc and memcpy API calls
   # ['BeginNs', 'EndNs', 'pid', 'tid', 'Name', 'args', 'Index', 'Data'],
-  def register_api(self, rec_vals):
+  def register_api(self, rec_vals, copy_index):
     res = ''
     record_name = rec_vals[4]  # 'Name'
+    if record_name == "hipMemcpyToArray":
+      return res
+
     record_args = rec_vals[5]  # 'args'
     malloc_ptrn = re.compile(r'hip.*Malloc|hsa_amd_memory_pool_allocate')
     mcopy_ptrn = re.compile(r'hipMemcpy|hsa_amd_memory_async_copy')
@@ -79,84 +109,69 @@ class MemManager:
     if malloc_ptrn.match(record_name):
       self.add_allocation(record_name, record_args)
     elif mcopy_ptrn.match(record_name):
-      res = self.add_memcpy(rec_vals)
+      res = self.add_memcpy(rec_vals, copy_index)
 
     return res
 
 
-  # register memcpy asynchronous copy
-  # ['BeginNs', 'EndNs', 'Name', 'pid', 'tid', 'Index', ...
-  def register_copy(self, rec_vals):
-    data = ''
-    event = rec_vals[2]     # 'Name'
-    procid = rec_vals[3]    # 'pid'
-    recordid = rec_vals[5]  # 'Index'
-    size_ptrn = re.compile(DELIM + 'Size=(\d+)' + DELIM)
-
-    # query syncronous memcopy API record
-    key = (recordid, procid, 0)
-    if key in self.memcopies:
-      data = self.memcopies[key]
-
-    # query asyncronous memcopy API record
-    key = (recordid, procid, 1)
-    if key in self.memcopies:
-      if data != '': fatal('register_copy: corrupted record sync/async')
-
-      async_copy_start_time = rec_vals[0]
-      async_copy_end_time = rec_vals[1]
-
-      duration = int(async_copy_end_time) - int(async_copy_start_time)
-      size = 0
-      m = size_ptrn.search(self.memcopies[key])
-      if m:
-        size = m.group(1)
-      bandwidth = round(float(size) * 1000 / duration, 2)
-
-      tid = rec_vals[4]
-      copy_line_header = str(async_copy_start_time) + DELIM + str(async_copy_end_time) + DELIM + str(procid) + DELIM + str(tid)
-      copy_line_footer = 'BW=' + str(bandwidth) + DELIM + 'Async=' + str(1)
-      data = copy_line_header + self.memcopies[key] + copy_line_footer
-      self.memcopies[key] = data
-
-    return data
-
   # register memcpy asynchronous activity
   # rec_vals: ['BeginNs', 'EndNs', 'dev-id', 'queue-id', 'Name', 'pid', 'tid', 'Index', 'Data', ...
   def register_activity(self, rec_vals):
-    data = ''
-    event = rec_vals[4]     # 'Name'
     procid = rec_vals[5]    # 'pid'
-    recordid = rec_vals[7]  # 'Index'
-    size_ptrn = re.compile(DELIM + 'Size=(\d+)' + DELIM)
+    recordid = rec_vals[8]  # 'Index'
+    tid = rec_vals[6]
+    async_copy_start_time = rec_vals[0]
+    async_copy_end_time = rec_vals[1]
 
+    return self.register_copy_impl(async_copy_start_time, async_copy_end_time, procid, tid, recordid)
+
+  # register memcpy asynchronous copy
+  # ['BeginNs', 'EndNs', 'Name', 'pid', 'tid', 'Index', ...
+  def register_copy(self, rec_vals):
+    procid = rec_vals[3]    # 'pid'
+    recordid = rec_vals[5]  # 'Index'
+    async_copy_start_time = rec_vals[0]
+    async_copy_end_time = rec_vals[1]
+    tid = rec_vals[4]
+
+    return self.register_copy_impl(async_copy_start_time, async_copy_end_time, procid, tid, recordid)
+
+  def register_copy_impl(self, start_time, end_time, procid, tid, recordid):
+    data = MemManagerRecord()
     # query syncronous memcopy API record
-    key = (recordid, procid, 0)
-    if key in self.memcopies:
-      data = self.memcopies[key]
+    sync_key = (recordid, procid, 0)
+    async_key = (recordid, procid, 1)
+
+    if sync_key in self.memcopies and async_key in self.memcopies:
+      fatal('register_copy_impl: corrupted record sync/async')
+
+    if sync_key in self.memcopies:
+      return self.memcopies[sync_key].str()
 
     # query asyncronous memcopy API record
-    key = (recordid, procid, 1)
-    if key in self.memcopies:
-      if data != '': fatal('register_activity: corrupted record sync/async')
+    if not async_key in self.memcopies:
+    # is this a valid case? mb fatal?
+    # writeImage is not added through hipMemcpyArray
+    # fatal("async_key not found")
+      return ''
+      
+    new_data = self.memcopies[async_key]
+    new_data.start_time = start_time
+    new_data.end_time = end_time
 
-      async_copy_start_time = rec_vals[0]
-      async_copy_end_time = rec_vals[1]
+    duration = int(end_time) - int(start_time)
+    # hsa api method "record" can have duration equal to 0
+    # if duration == 0:
+    #   fatal('register_copy_impl: zero duration')
 
-      duration = int(async_copy_end_time) - int(async_copy_start_time)
-      size = 0
-      m = size_ptrn.search(self.memcopies[key])
-      if m:
-        size = m.group(1)
-      bandwidth = round(float(size) * 1000 / duration, 2)
+    new_data.bandwidth = round(float(new_data.size) * 1000 / duration, 2) if duration != 0 else 0
+    # if (new_data.bandwidth == 0):
+    #   fatal("register_copy_impl: zero bandwith")
+    new_data.tid = tid
+    new_data.is_async = True
 
-      tid = rec_vals[6]
-      copy_line_header = str(async_copy_start_time) + DELIM + str(async_copy_end_time) + DELIM + str(procid) + DELIM + str(tid)
-      copy_line_footer = 'BW=' + str(bandwidth) + DELIM + 'Async=' + str(1)
-      data = copy_line_header + self.memcopies[key] + copy_line_footer
-      self.memcopies[key] = data
-
-    return data
+    self.memcopies[async_key] = new_data
+    return new_data.str()
 
   # add allocation to map
   def add_allocation(self, event, args):
@@ -221,8 +236,8 @@ class MemManager:
     return addr_type
 
   # add memcpy to map
-  def add_memcpy(self, recvals):
-    recordid = recvals[6]  #same as corrid
+  def add_memcpy(self, recvals, copy_index):
+    recordid = copy_index #recvals[6]  #same as corrid
     event = recvals[4]
     start_time = recvals[0] # sync time stamp
     end_time = recvals[1] # sync time stamp
@@ -239,6 +254,9 @@ class MemManager:
     # hipMemcpyToArray(hipArray* dst, size_t wOffset, size_t hOffset, const void* src,
     #                        size_t count, hipMemcpyKind kind);
     hip_memcpy_ptrn3 = re.compile(r'\(\s*dst\((.*)\) .* src\((.*)\) count\((\d+)\).*\)')
+    # hipMemcpyToSymbol(const void* symbolName, const void* src, size_t sizeBytes,
+    #    size_t offset = 0, hipMemcpyKind kind)
+    hip_memcpy_ptrn4 = re.compile(r'\(\s*symbol\((.*)\) src\((.*)\) sizeBytes\((\d+)\).*\)')
     # memcopy with kind argument
     hip_memcpy_ptrn_kind = re.compile(r'.* kind\((\d+)\)\s*.*')
     #hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent, const void* src,
@@ -257,13 +275,14 @@ class MemManager:
     # aysnc memcopy
     async_event_ptrn = re.compile(r'Async|async')
     m_basic_hip = hip_memcpy_ptrn.match(args)
+    m_basic_hsa3 = hip_memcpy_ptrn4.match(args)
     m_basic_hsa_prev = hsa_memcpy_ptrn_prev.match(args)
     m_basic_hsa = hsa_memcpy_ptrn.match(args)
     m_basic_hsa2 = hsa_memcpy_ptrn2.match(args)
     is_hip = True if not (m_basic_hsa_prev or m_basic_hsa or m_basic_hsa2) else False
     m_2d = hip_memcpy_ptrn2.match(args)
     m_array = hip_memcpy_ptrn3.match(args)
-    is_async = 1 if async_event_ptrn.search(event) else 0
+    is_async = True if async_event_ptrn.search(event) else False
     async_copy_start_time = -1
     async_copy_end_time = -1
     copy_line = ''
@@ -299,6 +318,7 @@ class MemManager:
       srcptr_type = self.get_ptr_type(src_agent_ptr)
       size = int(m_basic_hsa_prev.group(5))
       condition_matched = True
+
     if m_basic_hsa:
       dstptr = m_basic_hsa.group(1)
       dst_agent_ptr = m_basic_hsa.group(2)
@@ -320,6 +340,14 @@ class MemManager:
       y = int(m_basic_hsa2.group(4))
       x = int(m_basic_hsa2.group(5))
       size = x*y*z
+      condition_matched = True
+
+    if m_basic_hsa3:
+      dstptr = m_basic_hsa3.group(1)
+      dstptr_type = self.get_ptr_type(dstptr)
+      srcptr = m_basic_hsa3.group(2)
+      srcptr_type = self.get_ptr_type(srcptr)
+      size = int(m_basic_hsa3.group(3))
       condition_matched = True
 
     if m_array:
@@ -370,15 +398,22 @@ class MemManager:
         if self.hsa_agent_types[dst_agent_ptr] == 1: direction += 'D'
         elif self.hsa_agent_types[dst_agent_ptr] == 0: direction += 'H'
 
-    copy_line_header = ''
-    copy_line_footer = ''
-    copy_line_header = str(start_time) + DELIM + str(end_time) + DELIM + str(pid) + DELIM + str(tid)
-    copy_line_footer = "BW=" + str(bandwidth) + DELIM + 'Async=' + str(is_async)
+    mem_entry = MemManagerRecord()
 
-    copy_line = copy_line_header + DELIM + event + DELIM + 'Direction=' + direction + DELIM + 'SrcType=' + srcptr_type + DELIM + 'DstType=' + dstptr_type + DELIM + "Size=" + str(size) + DELIM + copy_line_footer
+    mem_entry.start_time = start_time
+    mem_entry.end_time = end_time
+    mem_entry.pid = pid
+    mem_entry.tid = tid
+    mem_entry.event = event
+    mem_entry.direction = direction
+    mem_entry.srcptr_type = srcptr_type
+    mem_entry.dstptr_type = dstptr_type
+    mem_entry.size = size
+    mem_entry.bandwidth = bandwidth
+    mem_entry.is_async = is_async
 
-    self.memcopies[(recordid, procid, is_async)] = copy_line
-    return copy_line;
+    self.memcopies[(recordid, procid, is_async)] = mem_entry
+    return mem_entry.str();
 
   def dump_data(self, table_name, file_name):
     # To create memcopy info table in DB
@@ -388,7 +423,7 @@ class MemManager:
     fld_ptrn = re.compile(r'(.*)=(.*)')
     for (key, record) in self.memcopies.items():
       rec_vals_array = []
-      for rec in record.split(DELIM):
+      for rec in record.str().split(DELIM):
         fld_ptrnm = fld_ptrn.match(rec)
         if fld_ptrnm:
           rec_vals_array.append(fld_ptrnm.group(2))
@@ -398,3 +433,4 @@ class MemManager:
 
     # To dump the memcopy info table as CSV
     self.db.dump_csv(table_name, file_name)
+
