@@ -1130,6 +1130,10 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
 
   const uint32_t features_found = metrics_vec.size();
 
+   if (!features_found) {
+    CTX_OUTSTANDING_MAX = 0;
+  }
+
   // Context array aloocation
   context_array = new context_array_t;
 
