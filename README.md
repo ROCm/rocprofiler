@@ -195,3 +195,9 @@ Configuration file:
       obj-tracking=on
     ></defaults>
 ```
+
+
+## Known Issues:
+- For workloads where the hip application might make more than 10 million HIP API calls, the application might crash with the error - "Profiling data corrupted"
+  - Suggested Workaround - Instead of profiling for the complete run, it is suggested to run profiling in parts by using the --trace-period option.
+- When the same kernel is launched back to back multiple times on a GPU, the cache hit rate from rocprofiler is reported as 0% or very low. This also causes FETCH_SIZE to be not usable for repeatable kernel.
