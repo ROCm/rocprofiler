@@ -414,7 +414,7 @@ class HsaRsrcFactory {
   static const char* GetKernelNameRef(uint64_t addr);
 
   // Initialize HSA API table
-  void static InitHsaApiTable(HsaApiTable* table);
+  void InitHsaApiTable(HsaApiTable* table);
   static const hsa_pfn_t* HsaApi() { return &hsa_api_; }
 
   // Return AqlProfile API table

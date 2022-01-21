@@ -111,7 +111,7 @@ decltype(hsa_executable_destroy)* hsa_executable_destroy_fn;
 ::HsaApiTable* kHsaApiTable;
 
 void SaveHsaApi(::HsaApiTable* table) {
-  util::HsaRsrcFactory::InitHsaApiTable(table);
+  util::HsaRsrcFactory::Instance().InitHsaApiTable(table);
 
   kHsaApiTable = table;
   hsa_queue_create_fn = table->core_->hsa_queue_create_fn;
