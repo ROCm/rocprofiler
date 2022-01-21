@@ -184,7 +184,6 @@ HsaRsrcFactory::~HsaRsrcFactory() {
 void HsaRsrcFactory::InitHsaApiTable(HsaApiTable* table) {
   std::lock_guard<mutex_t> lck(mutex_);
 
-  if (hsa_api_.hsa_init == NULL) {
     if (table != NULL) {
       hsa_api_.hsa_init = table->core_->hsa_init_fn;
       hsa_api_.hsa_shut_down = table->core_->hsa_shut_down_fn;
@@ -268,7 +267,6 @@ void HsaRsrcFactory::InitHsaApiTable(HsaApiTable* table) {
       hsa_api_.hsa_amd_profiling_get_async_copy_time = hsa_amd_profiling_get_async_copy_time;
       hsa_api_.hsa_amd_profiling_get_dispatch_time = hsa_amd_profiling_get_dispatch_time;
     }
-  }
 }
 
 hsa_status_t HsaRsrcFactory::LoadAqlProfileLib(aqlprofile_pfn_t* api) {
