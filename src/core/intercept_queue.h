@@ -526,6 +526,7 @@ class InterceptQueue {
   static void RemoveCallbacks() {
     std::lock_guard<mutex_t> lck(mutex_);
     callbacks_ = {};
+    callback_data_ = NULL;
     Stop();
   }
 
