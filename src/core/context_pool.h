@@ -156,7 +156,9 @@ class ContextPool {
       entry_t* entry = reinterpret_cast<entry_t*>(ptr);
       Context::Destroy(entry->context);
     }
-    free(array_);
+    if (constructed_) {
+      free(array_);
+    }
   }
 
   char* GetArrayPtr(const uint32_t& index) { return array_ + (index % array_size_bytes_); }
