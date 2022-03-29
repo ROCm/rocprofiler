@@ -52,6 +52,9 @@ GEN_STATS=0
 # Quoting profiled cmd line
 CMD_QTS=1
 
+# Save temporary files
+SAVE_TMP=0
+
 export PATH=.:$PATH
 
 # enable error logging
@@ -153,6 +156,7 @@ usage() {
   echo "  -t <temporary directory> - to change the temporary directory [/tmp]"
   echo "      By changing the temporary directory you can prevent removing the profiling data from /tmp or enable removing from not '/tmp' directory."
   echo "  -m <metric file> - file defining custom metrics to use in-place of defaults."
+  echo "  --save-temp save temporary output"
   echo ""
   echo "  --basenames <on|off> - to turn on/off truncating of the kernel full function names till the base ones [off]"
   echo "  --timestamp <on|off> - to turn on/off the kernel disoatches timestamps, dispatch/begin/end/complete [off]"
@@ -369,6 +373,8 @@ while [ 1 ] ; do
     if [ "$OUTPUT_DIR" = "-" ] ; then
       DATA_PATH=$TMP_DIR
     fi
+  elif [ "$1" = "--save-temp" ] ; then
+    SAVE_TEMP=1
   elif [ "$1" = "-m" ] ; then
     unset ROCP_METRICS
     export ROCP_METRICS="$2"
@@ -577,9 +583,11 @@ if [ -n "$csv_output" ] ; then
   fi
 fi
 
-if [ "$DATA_PATH" = "$TMP_DIR" ] ; then
-  if [ -e "$RES_DIR" ] ; then
-    rm -rf $RES_DIR
+if [ "$SAVE_TEMP" = 0 ] ; then
+  if [ "$DATA_PATH" = "$TMP_DIR" ] ; then
+    if [ -e "$RES_DIR" ] ; then
+      rm -rf $RES_DIR
+    fi
   fi
 fi
 
