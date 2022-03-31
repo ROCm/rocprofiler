@@ -39,6 +39,9 @@
 </gfx9_expr>
 
 <gfx906_expr base="gfx9_expr">
+  <metric name="TCC_HIT_sum" expr=sum(TCC_HIT,16) descr="Number of cache hits. Sum over TCC instances."></metric>
+  <metric name="TCC_MISS_sum" expr=sum(TCC_MISS,16) descr="Number of cache misses. Sum over TCC instances."></metric>
+
   # EA1
   <metric name="TCC_EA1_RDREQ_32B_sum" expr=sum(TCC_EA1_RDREQ_32B,16) descr="Number of 32-byte TCC/EA read requests. Sum over TCC EA1s."></metric>
   <metric name="TCC_EA1_RDREQ_sum" expr=sum(TCC_EA1_RDREQ,16) descr="Number of TCC/EA read requests (either 32-byte or 64-byte). Sum over TCC EA1s."></metric>
@@ -200,7 +203,7 @@
   <metric
     name="L2CacheHit"
     descr="The percentage of fetch, write, atomic, and other instructions that hit the data in L2 cache. Value range: 0% (no hit) to 100% (optimal)."
-    expr=100*sum(TCC_HIT,16)/(sum(TCC_HIT,16)+sum(TCC_MISS,16))
+    expr=100*TCC_HIT_sum/(TCC_HIT_sum+TCC_MISS_sum)
   ></metric>
 
   # MemUnitBusy     The percentage of GPUTime the memory unit is active. The result includes the stall time (MemUnitStalled). This is measured with all extra fetches and writes and any cache or memory effects taken into account. Value range: 0% to 100% (fetch-bound).
