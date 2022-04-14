@@ -28,7 +28,7 @@ PKG_DIR=$(dirname $BIN_DIR)
 ROOT_DIR=$(dirname $PKG_DIR)
 TT_DIR=$ROOT_DIR/roctracer
 RUN_DIR=`pwd`
-TMP_DIR="/tmp"
+TMP_DIR="/tmp/${time_stamp}"
 DATA_DIR="rpl_data_${time_stamp}_$$"
 
 RPL_PATH=$PKG_DIR/lib
