@@ -737,6 +737,12 @@ const char* HsaRsrcFactory::GetKernelNameRef(uint64_t addr) {
 
 void HsaRsrcFactory::EnableExecutableTracking(HsaApiTable* table) {
   std::lock_guard<mutex_t> lck(mutex_);
+  // Prevent infinite recursion
+  //
+  if (hsa_api_.hsa_executable_freeze == hsa_executable_freeze &&
+      hsa_api_.hsa_executable_destroy == hsa_executable_destroy)
+      return;
+
   executable_tracking_on_ = true;
   table->core_->hsa_executable_freeze_fn = hsa_executable_freeze_interceptor;
   table->core_->hsa_executable_destroy_fn = hsa_executable_destroy_interceptor;
