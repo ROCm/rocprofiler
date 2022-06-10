@@ -25,6 +25,8 @@ cmake_minimum_required ( VERSION 2.8.12 )
 # Install prefix
 set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "Install path prefix default")
 
+list (APPEND CMAKE_PREFIX_PATH /opt/rocm/hip /opt/rocm)
+
 ## Verbose output.
 set ( CMAKE_VERBOSE_MAKEFILE TRUE CACHE BOOL "Verbose Output" FORCE )
 
