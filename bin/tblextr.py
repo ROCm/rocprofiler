@@ -20,7 +20,7 @@
 # THE SOFTWARE.
 ################################################################################
 
-import os, sys, re, subprocess
+import os, sys, re, subprocess, bisect
 from sqlitedb import SQLiteDB
 from mem_manager import MemManager
 import dform
@@ -119,24 +119,29 @@ def parse_res(infile):
   # line text in the format of for example "WRITE_SIZE (0.2500000000)" or
   # "GRBM_GUI_ACTIVE (27867)" or "TA_TA_BUSY[0]"
   var_pattern = re.compile("^\s*([a-zA-Z0-9_]+(?:\[\d+\])?)\s+\((\d+(?:\.\d+)?)\)")
+  pid_pattern = re.compile("pid\((\d*)\)")
 
   dispatch_number = 0
+  var_table_pid = 0
   for line in inp.readlines():
     record = line[:-1]
 
+    m = pid_pattern.search(record)
+    if m and not os.getenv('ROCP_MERGE_PIDS'): var_table_pid = int(m.group(1))
+
     m = var_pattern.match(record)
     if m:
-      if not dispatch_number in var_table: fatal("Error: dispatch number not found '" + str(dispatch_number) + "'")
+      if not (var_table_pid, dispatch_number) in var_table: fatal("Error: dispatch number not found '" + str(dispatch_number) + "'")
       var = m.group(1)
       val = m.group(2)
-      var_table[dispatch_number][var] = val
+      var_table[(var_table_pid, dispatch_number)][var] = val
       if not var in var_list: var_list.append(var)
 
     m = beg_pattern.match(record)
     if m:
       dispatch_number = m.group(1)
-      if not dispatch_number in var_table:
-        var_table[dispatch_number] = {
+      if not (var_table_pid, dispatch_number) in var_table:
+        var_table[(var_table_pid, dispatch_number)] = {
           'Index': dispatch_number,
           'KernelName': "\"" + m.group(3) + "\""
         }
@@ -152,7 +157,7 @@ def parse_res(infile):
           if m:
             var = m.group(1)
             val = m.group(2)
-            var_table[dispatch_number][var] = val
+            var_table[(var_table_pid, dispatch_number)][var] = val
             if not var in var_list: var_list.append(var);
             if var == 'gpu-id':
               gpu_id = int(val)
@@ -163,10 +168,10 @@ def parse_res(infile):
           else: fatal('wrong kernel property "' + prop + '" in "'+ kernel_properties + '"')
         m = ts_pattern.search(record)
         if m:
-          var_table[dispatch_number]['DispatchNs'] = m.group(1)
-          var_table[dispatch_number]['BeginNs'] = m.group(2)
-          var_table[dispatch_number]['EndNs'] = m.group(3)
-          var_table[dispatch_number]['CompleteNs'] = m.group(4)
+          var_table[(var_table_pid, dispatch_number)]['DispatchNs'] = m.group(1)
+          var_table[(var_table_pid, dispatch_number)]['BeginNs'] = m.group(2)
+          var_table[(var_table_pid, dispatch_number)]['EndNs'] = m.group(3)
+          var_table[(var_table_pid, dispatch_number)]['CompleteNs'] = m.group(4)
 
           ## filling dependenciws
           from_ns = int(m.group(1))
@@ -189,10 +194,17 @@ def parse_res(infile):
   inp.close()
 #############################################################
 
+# Comparator to sort a dictionary of tuples. This comparator will convert
+# the second element of tuple to an int and return the new tuple. Then
+# the dictionary can use the default comparison i.e sort by first element,
+# then sort by second element.
+def tuple_comparator(tupleElem) :
+    return tupleElem[0], int(tupleElem[1])
+
 # merge results table
 def merge_table():
   global var_list
-  keys = sorted(var_table.keys(), key=int)
+  keys = sorted(var_table.keys(), key=tuple_comparator)
 
   fields = set(var_table[keys[0]])
   if 'DispatchNs' in fields:
@@ -206,12 +218,12 @@ def merge_table():
 # dump CSV results
 def dump_csv(file_name):
   global var_list
-  keys = sorted(var_table.keys(), key=int)
+  keys = sorted(var_table.keys(), key=tuple_comparator)
 
   with open(file_name, mode='w') as fd:
     fd.write(','.join(var_list) + '\n');
-    for ind in keys:
-      entry = var_table[ind]
+    for pid, ind in keys:
+      entry = var_table[(pid, ind)]
       dispatch_number = entry['Index']
       if ind != dispatch_number: fatal("Dispatch #" + ind + " index mismatch (" + dispatch_number + ")\n")
       val_list = [entry[var] for var in var_list]
@@ -223,7 +235,7 @@ def dump_csv(file_name):
 # fill kernels DB
 def fill_kernel_db(table_name, db):
   global var_list
-  keys = sorted(var_table.keys(), key=int)
+  keys = sorted(var_table.keys(), key=tuple_comparator)
 
   for var in set(var_list).difference(set(table_descr[1])):
     table_descr[1][var] = 'INTEGER'
@@ -231,8 +243,8 @@ def fill_kernel_db(table_name, db):
 
   table_handle = db.add_table(table_name, table_descr)
 
-  for ind in keys:
-    entry = var_table[ind]
+  for pid, ind in keys:
+    entry = var_table[(pid, ind)]
     dispatch_number = entry['Index']
     if ind != dispatch_number: fatal("Dispatch #" + ind + " index mismatch (" + dispatch_number + ")\n")
     val_list = [entry[var] for var in var_list]
@@ -245,14 +257,17 @@ ext_table_descr = [
   {'BeginNs':'INTEGER', 'EndNs':'INTEGER', 'pid':'INTEGER', 'tid':'INTEGER', 'Name':'TEXT', 'Index':'INTEGER', '__section':'INTEGER', '__lane':'INTEGER'}
 ]
 def fill_ext_db(table_name, db, indir, trace_name, api_pid):
+  global range_data
+
   file_name = indir + '/' + trace_name + '_trace.txt'
   # tms pid:tid cid:rid:'.....'
-  ptrn_val = re.compile(r'(\d+) (\d+):(\d+) (\d+):(\d+):(.*)$')
+  ptrn_val = re.compile(r'(\d+) (\d+):(\d+) (\d+):(\d+):"(.*)"$')
 
-  if not os.path.isfile(file_name): return 0
-
+  range_data = {}
   range_stack = {}
   range_map = {}
+
+  if not os.path.isfile(file_name): return 0
 
   record_id = 0
   table_handle = db.add_table(table_name, ext_table_descr)
@@ -263,12 +278,13 @@ def fill_ext_db(table_name, db, indir, trace_name, api_pid):
       if m:
         tms = int(m.group(1))
         pid = m.group(2)
-        tid = m.group(3)
+        tid = int(m.group(3))
         cid = int(m.group(4))
         rid = int(m.group(5))
         msg = m.group(6)
 
         rec_vals = []
+        if not tid in range_data: range_data[tid] = {}
 
         if cid != 2:
           rec_vals.append(tms)
@@ -295,6 +311,12 @@ def fill_ext_db(table_name, db, indir, trace_name, api_pid):
           rec_stack = pid_stack[tid]
           rec_vals = rec_stack.pop()
           rec_vals[1] = tms
+          # record the range's start/stop timestamps, its parent (ranges can be nested), and its message.
+          range_start = rec_vals[0]
+          range_stop = tms
+          range_parent = rec_stack[-1][0] if len(rec_stack) != 0 else 0
+          range_msg = rec_vals[4]
+          range_data[tid][range_start] = (range_stop, range_parent, range_msg)
 
         # range start
         if cid == 3:
@@ -352,6 +374,7 @@ def fill_api_db(table_name, db, indir, api_name, api_pid, dep_pid, dep_list, dep
   global hsa_activity_found
   global memory_manager
 
+  range_start_times = {}
   copy_csv = ''
   copy_index = 0
 
@@ -508,7 +531,26 @@ def fill_api_db(table_name, db, indir, api_name, api_pid, dep_pid, dep_list, dep
           copy_index += 1
 
         if op_found:
-          ops_patch_data[(corr_id, proc_id)] = (thread_id, stream_id, kernel_str)
+          roctx_msg = ''
+
+          if not thread_id in range_start_times:
+            range_start_times[thread_id] = sorted(range_data[thread_id].keys()) if thread_id in range_data else []
+          start_times = range_start_times[thread_id]
+
+          index = bisect.bisect_right(start_times,int(rec_vals[0]))
+          if index > 0:
+            # We found the range that is closest to this operation. Iterate the
+            # range stack this range is part of until we find a range that entirely
+            # contains the operation.
+            range_start = start_times[index - 1]
+            while range_start != 0:
+              (range_end, range_start, msg) = range_data[thread_id][range_start]
+              if int(rec_vals[1]) < range_end:
+                # This range contains the operation.
+                roctx_msg = msg
+                break
+
+          ops_patch_data[(corr_id, proc_id)] = (thread_id, stream_id, kernel_str, roctx_msg)
 
         if op_found:
           op_found = 0
@@ -581,6 +623,8 @@ def fill_copy_db(table_name, db, indir):
         # querying tid value
         if (corr_id, proc_id) in hsa_patch_data:
           thread_id = hsa_patch_data[(corr_id, proc_id)]
+        else:
+          thread_id = -1
 
         # completing record
         rec_vals.append(proc_id)          # tid
@@ -602,19 +646,20 @@ def fill_copy_db(table_name, db, indir):
         to_ns = int(rec_vals[0])
         to_us = int((to_ns - START_NS) / 1000)
 
-        #if not proc_id in dep_dict: dep_dict[proc_id] = {}
-        dep_proc = dep_dict[proc_id]
-        #if not pid in dep_proc: dep_proc[pid] = { 'pid': HSA_PID, 'from': [], 'to': {}, 'id': [] }
-        dep_str = dep_proc[sect_id]
-        dep_str['to'][corr_id] = to_us
+        if thread_id != -1:
+          #if not proc_id in dep_dict: dep_dict[proc_id] = {}
+          dep_proc = dep_dict[proc_id]
+          #if not pid in dep_proc: dep_proc[pid] = { 'pid': HSA_PID, 'from': [], 'to': {}, 'id': [] }
+          dep_str = dep_proc[sect_id]
+          dep_str['to'][corr_id] = to_us
 
   return 1
 #############################################################
 
 # fill HCC ops DB
 ops_table_descr = [
-  ['BeginNs', 'EndNs', 'dev-id', 'queue-id', 'Name', 'pid', 'tid', 'stream-id', 'Index', 'Data', '__section', '__lane'],
-  {'Index':'INTEGER', 'Name':'TEXT', 'args':'TEXT', 'BeginNs':'INTEGER', 'EndNs':'INTEGER', 'dev-id':'INTEGER', 'queue-id':'INTEGER', 'pid':'INTEGER', 'tid':'INTEGER', 'Data':'TEXT', 'stream-id':'INTEGER', '__section':'INTEGER', '__lane':'INTEGER'}
+  ['BeginNs', 'EndNs', 'dev-id', 'queue-id', 'Name', 'pid', 'tid', 'roctx-range', 'stream-id', 'Index', 'Data', '__section', '__lane'],
+  {'Index':'INTEGER', 'Name':'TEXT', 'args':'TEXT', 'BeginNs':'INTEGER', 'EndNs':'INTEGER', 'dev-id':'INTEGER', 'queue-id':'INTEGER', 'pid':'INTEGER', 'tid':'INTEGER', 'roctx-range':'TEXT', 'Data':'TEXT', 'stream-id':'INTEGER', '__section':'INTEGER', '__lane':'INTEGER'}
 ]
 def fill_ops_db(kernel_table_name, mcopy_table_name, db, indir):
   global max_gpu_id
@@ -674,9 +719,11 @@ def fill_ops_db(kernel_table_name, mcopy_table_name, db, indir):
 
         thread_id = 0
         stream_id = 0
+        roctx_range = ''
         if (corr_id, proc_id) in ops_patch_data:
-          (thread_id, stream_id, name_patch) = ops_patch_data[(corr_id, proc_id)]
+          (thread_id, stream_id, name_patch, roctx_range) = ops_patch_data[(corr_id, proc_id)]
           if name_patch != '': name = name_patch
+          if roctx_range == '': roctx_range = name
         else:
           if is_barrier: continue
           else: fatal("hcc ops data not found: '" + record + "', " + str(corr_id) + ", " + str(proc_id))
@@ -685,6 +732,7 @@ def fill_ops_db(kernel_table_name, mcopy_table_name, db, indir):
         rec_vals[4] = name                       # Name
         rec_vals.append(proc_id)                 # pid
         rec_vals.append(thread_id)               # tid
+        rec_vals.append(roctx_range)             # roctx-range
         rec_vals.append(stream_id)               # StreamId
         rec_vals.append(corr_id)                 # Index
 
