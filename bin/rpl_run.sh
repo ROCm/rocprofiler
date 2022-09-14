@@ -186,7 +186,7 @@ usage() {
   echo "    Supported time formats: <number(m|s|ms|us)>"
   echo "  --flush-rate <rate> - to enable trace flush rate (time period)"
   echo "    Supported time formats: <number(m|s|ms|us)>"
-  echo "  --parallel-kernels - to enable cnocurrent kernels"
+  echo "  --parallel-kernels - to enable concurrent kernels"
   echo ""
   echo "Configuration file:"
   echo "  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:${HOME}:<package path>"
