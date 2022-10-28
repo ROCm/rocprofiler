@@ -22,9 +22,6 @@
 
 cmake_minimum_required ( VERSION 2.8.12 )
 
-# Install prefix
-set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "Install path prefix default")
-
 ## Verbose output.
 set ( CMAKE_VERBOSE_MAKEFILE TRUE CACHE BOOL "Verbose Output" FORCE )
 
@@ -32,8 +29,11 @@ set ( CMAKE_VERBOSE_MAKEFILE TRUE CACHE BOOL "Verbose Output" FORCE )
 set ( ROCPROFILER_NAME "rocprofiler" )
 set ( ROCPROFILER_TARGET "${ROCPROFILER_NAME}64" )
 set ( ROCPROFILER_LIBRARY "lib${ROCPROFILER_TARGET}" )
-project ( ${ROCPROFILER_TARGET} )
+project ( ${ROCPROFILER_NAME} )
 
+# Set default libdir to be "lib" for ROCm
+set(CMAKE_INSTALL_LIBDIR "lib" CACHE STRING "Library install directory")
+include(GNUInstallDirs)
 ## Adding default path cmake modules
 list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules" )
 ## Include common cmake modules
@@ -78,13 +78,13 @@ endif()
 # Protocol header lookup
 set(PROF_API_HEADER_NAME prof_protocol.h)
 if(USE_PROF_API EQUAL 1)
-    find_path(PROF_API_HEADER_DIR ${PROF_API_HEADER_NAME}
+  find_path(PROF_API_HEADER_DIR ${PROF_API_HEADER_NAME}
         HINTS
-            ${PROF_API_HEADER_PATH}
+          ${PROF_API_HEADER_PATH}
         PATHS
-            /opt/rocm/roctracer
+            /opt/rocm/include
         PATH_SUFFIXES
-            include/ext
+            roctracer/ext
     )
     if(NOT PROF_API_HEADER_DIR)
         MESSAGE(FATAL_ERROR "Profiling API header not found. Tracer integration disabled. Use -DPROF_API_HEADER_PATH=<path to ${PROF_API_HEADER_NAME} header>")
@@ -132,17 +132,16 @@ message ( "CMake-install-prefix: ${CMAKE_INSTALL_PREFIX}" )
 message ( "CPack-install-prefix: ${CPACK_PACKAGING_INSTALL_PREFIX}" )
 message ( "-----------Dest-name: ${DEST_NAME}" )
 
-
 # Install header and library
-install ( TARGETS ${ROCPROFILER_TARGET} LIBRARY DESTINATION lib )
+install ( TARGETS ${ROCPROFILER_TARGET} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} )
 install ( FILES
           ${CMAKE_CURRENT_SOURCE_DIR}/inc/rocprofiler.h
           ${CMAKE_CURRENT_SOURCE_DIR}/src/core/activity.h
-          DESTINATION include/${DEST_NAME} )
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${DEST_NAME} )
 # rpl_run.sh tblextr.py txt2xml.sh
 install ( FILES
           ${CMAKE_CURRENT_SOURCE_DIR}/bin/rpl_run.sh
-          DESTINATION bin
+          DESTINATION ${CMAKE_INSTALL_BINDIR}
           PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
           RENAME rocprof )
 
@@ -154,16 +153,16 @@ install ( FILES
           ${CMAKE_CURRENT_SOURCE_DIR}/bin/dform.py
           ${CMAKE_CURRENT_SOURCE_DIR}/bin/mem_manager.py
           ${CMAKE_CURRENT_SOURCE_DIR}/bin/sqlitedb.py
-          DESTINATION libexec/${DEST_NAME}
+          DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/${DEST_NAME}
           PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE )
 # gfx_metrics.xml metrics.xml
 install ( FILES
           ${CMAKE_CURRENT_SOURCE_DIR}/test/tool/metrics.xml
           ${CMAKE_CURRENT_SOURCE_DIR}/test/tool/gfx_metrics.xml
-          DESTINATION lib/${DEST_NAME} )
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/${DEST_NAME} )
 # librocprof-tool.so
-install ( FILES ${PROJECT_BINARY_DIR}/test/librocprof-tool.so DESTINATION lib/${DEST_NAME} )
-install ( FILES ${PROJECT_BINARY_DIR}/test/rocprof-ctrl DESTINATION lib/${DEST_NAME}
+install ( FILES ${PROJECT_BINARY_DIR}/test/librocprof-tool.so DESTINATION ${CMAKE_INSTALL_LIBDIR}/${DEST_NAME} )
+install ( FILES ${PROJECT_BINARY_DIR}/test/rocprof-ctrl DESTINATION ${CMAKE_INSTALL_LIBDIR}/${DEST_NAME}
           PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE )
 
 # File reorg Backward compatibility
@@ -171,8 +170,6 @@ option(FILE_REORG_BACKWARD_COMPATIBILITY "Enable File Reorg with backward compat
 if(FILE_REORG_BACKWARD_COMPATIBILITY)
   include (rocprofiler-backward-compat.cmake)
 endif()
-# links
-#install ( FILES ${PROJECT_BINARY_DIR}/inc-link DESTINATION include RENAME ${DEST_NAME} )
 
 ## Packaging directives
 set ( CPACK_GENERATOR "DEB" "RPM" "TGZ" CACHE STRING "CPACK GENERATOR e.g. DEB;RPM" )
@@ -188,7 +185,7 @@ set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "ROCPROFILER library for AMD HSA runtime
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" )
 
 # Install license file
-install(FILES ${CPACK_RESOURCE_FILE_LICENSE} DESTINATION share/doc/${CPACK_PACKAGE_NAME})
+install(FILES ${CPACK_RESOURCE_FILE_LICENSE} DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
 if ( DEFINED ENV{ROCM_LIBPATCH_VERSION} )
   set ( CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}.$ENV{ROCM_LIBPATCH_VERSION}" )

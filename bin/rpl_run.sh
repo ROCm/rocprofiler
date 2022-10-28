@@ -25,14 +25,13 @@
 time_stamp=`date +%y%m%d_%H%M%S`
 BIN_DIR=$(dirname $(realpath ${BASH_SOURCE[0]}))
 ROOT_DIR=$(dirname $BIN_DIR)
-TT_DIR=$ROOT_DIR/roctracer
 RUN_DIR=`pwd`
 TMP_DIR="/tmp"
 DATA_DIR="rpl_data_${time_stamp}_$$"
 
 RPL_PATH=$ROOT_DIR/lib
 TLIB_PATH=$RPL_PATH/rocprofiler
-TTLIB_PATH=$TT_DIR/tool
+TTLIB_PATH=$ROOT_DIR/lib/roctracer
 ROCM_LIB_PATH=$ROOT_DIR/lib
 PROF_BIN_DIR=$ROOT_DIR/libexec/rocprofiler
 
@@ -149,13 +148,13 @@ usage() {
   echo ""
   echo "  -o <output file> - output CSV file [<input file base>.csv]"
   echo "  -d <data directory> - directory where profiler store profiling data including traces [/tmp]"
-  echo "      The data directory is renoving autonatically if the directory is matching the temporary one, which is the default."
+  echo "      The data directory is automatically removed if it is matching the default temporary directory."
   echo "  -t <temporary directory> - to change the temporary directory [/tmp]"
   echo "      By changing the temporary directory you can prevent removing the profiling data from /tmp or enable removing from not '/tmp' directory."
   echo "  -m <metric file> - file defining custom metrics to use in-place of defaults."
   echo ""
   echo "  --basenames <on|off> - to turn on/off truncating of the kernel full function names till the base ones [off]"
-  echo "  --timestamp <on|off> - to turn on/off the kernel disoatches timestamps, dispatch/begin/end/complete [off]"
+  echo "  --timestamp <on|off> - to turn on/off the kernel dispatches timestamps, dispatch/begin/end/complete during kernel profiling [off]"
   echo "  --ctx-wait <on|off> - to wait for outstanding contexts on profiler exit [on]"
   echo "  --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]"
   echo "  --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]"
@@ -186,11 +185,11 @@ usage() {
   echo "    Supported time formats: <number(m|s|ms|us)>"
   echo "  --flush-rate <rate> - to enable trace flush rate (time period)"
   echo "    Supported time formats: <number(m|s|ms|us)>"
-  echo "  --parallel-kernels - to enable cnocurrent kernels"
+  echo "  --parallel-kernels - to enable concurrent kernels"
   echo ""
   echo "Configuration file:"
-  echo "  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:${HOME}:<package path>"
-  echo "  First the configuration file is looking in the current directory, then in your home, and then in the package directory."
+  echo "  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:${HOME}:<installation directory>"
+  echo "  First the configuration file is searched in the current directory, then in the current user's home directory, and then in the installation directory."
   echo "  Configurable options: 'basenames', 'timestamp', 'ctx-limit', 'heartbeat', 'obj-tracking'."
   echo "  An example of 'rpl_rc.xml':"
   echo "    <defaults"
@@ -273,11 +272,21 @@ run() {
 
   if [ "$HSA_TRACE" = 1 ] ; then
     export ROCTRACER_DOMAIN=$API_TRACE":hsa"
-    MY_HSA_TOOLS_LIB="$MY_HSA_TOOLS_LIB $TTLIB_PATH/libtracer_tool.so"
+    MY_HSA_TOOLS_LIB="$MY_HSA_TOOLS_LIB $ROCM_LIB_PATH/libroctracer64.so $TTLIB_PATH/libroctracer_tool.so"
   elif [ -n "$API_TRACE" ] ; then
     export ROCTRACER_DOMAIN=$API_TRACE
     OUTPUT_LIST="$ROCP_OUTPUT_DIR/"
-    MY_HSA_TOOLS_LIB="$TTLIB_PATH/libtracer_tool.so"
+    MY_HSA_TOOLS_LIB="$ROCM_LIB_PATH/libroctracer64.so $TTLIB_PATH/libroctracer_tool.so"
+  fi
+
+  if [ "$ROCP_STATS_OPT" = 1 ] ; then
+    if [ "$ROCTRACER_DOMAIN" = ":hip" ] ; then
+      MY_HSA_TOOLS_LIB="$ROCM_LIB_PATH/libroctracer64.so $TTLIB_PATH/libhip_stats.so"
+    else
+      error_message="ROCP_STATS_OPT is only available with --hip-trace option"
+      echo $error_message
+      exit 1
+    fi
   fi
 
   retval=1

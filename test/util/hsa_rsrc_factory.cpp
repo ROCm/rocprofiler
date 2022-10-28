@@ -27,9 +27,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <cxxabi.h>
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <hsa.h>
-#include <hsa_ext_amd.h>
-#include <hsa_ext_finalize.h>
+#include <hsa/hsa.h>
+#include <hsa/hsa_ext_amd.h>
+#include <hsa/hsa_ext_finalize.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -353,11 +353,6 @@ const AgentInfo* HsaRsrcFactory::AddAgentInfo(const hsa_agent_t agent) {
     agent_info->kern_arg_pool = {};
     status = hsa_api_.hsa_amd_agent_iterate_memory_pools(agent, FindStandardPool, &agent_info->gpu_pool);
     CHECK_ITER_STATUS("hsa_amd_agent_iterate_memory_pools(gpu pool)", status);
-
-    // GFX8 and GFX9 SGPR/VGPR block sizes
-    agent_info->sgpr_block_dflt = (strcmp(agent_info->gfxip, "gfx8") == 0) ? 1 : 2;
-    agent_info->sgpr_block_size = 8;
-    agent_info->vgpr_block_size = 4;
 
     // Set GPU index
     agent_info->dev_index = gpu_list_.size();
