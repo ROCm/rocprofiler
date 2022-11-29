@@ -370,7 +370,7 @@ while [ 1 ] ; do
   elif [ "$1" = "-o" ] ; then
     output="$2"
     if [[ $output != *.csv ]]; then
-      echo "error: file name must have .CSV extension"
+      echo "ROCm profiller error: file name provided by -o must have .csv extension"
       exit 1
     fi
   elif [ "$1" = "-d" ] ; then
