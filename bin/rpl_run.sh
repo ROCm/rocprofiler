@@ -26,7 +26,7 @@ time_stamp=`date +%y%m%d_%H%M%S`
 BIN_DIR=$(dirname $(realpath ${BASH_SOURCE[0]}))
 ROOT_DIR=$(dirname $BIN_DIR)
 RUN_DIR=`pwd`
-TMP_DIR="/tmp"
+TMP_DIR="/tmp/${time_stamp}"
 DATA_DIR="rpl_data_${time_stamp}_$$"
 
 RPL_PATH=$ROOT_DIR/lib
