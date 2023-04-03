@@ -2,3 +2,11 @@ build
 compile_commands.json
 .cache
 .DS_Store
+
+# documentation artifacts
+_build/
+_images/
+_static/
+_templates/
+_toc.yml
+docBin/

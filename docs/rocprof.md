@@ -1,12 +1,18 @@
 # rocprof
+
 ## 1. Overview
+
 The rocProf is a command line tool implemented on the top of  rocProfiler and rocTracer APIs. Source code for rocProf may be found here: 
-GitHub: https://github.com/ROCm-Developer-Tools/rocprofiler/blob/amd-master/bin/rocprof  
+GitHub: https://github.com/ROCm-Developer-Tools/rocprofiler  
 This command line tool is implemented as a script which is setting up the environment for attaching the profiler and then run the provided application command line. The tool uses two profiling plugins loaded by ROC runtime and based on rocProfiler and rocTracer for collecting metrics/counters, HW traces and runtime API/activity traces. The tool consumes an input XML or text file with counters list or trace parameters and provides output profiling data and statistics in various formats as text, CSV and JSON traces. Google Chrome tracing can be used to visualize the JSON traces with runtime API/activity timelines and per kernel counters data.
+
 ## 2. Profiling Modes
-‘rocprof’ can be used for GPU profiling using HW counters and application tracing
+
+‘rocprof’ can be used for G5PU profiling using HW counters and application tracing
+
 ### 2.1. GPU profiling
-GPU profiling is controlled with input file which defines a list of metrics/counters and a profiling scope. An input file is provided using option ‘-i <input file>’. Output CSV file with a line per submitted kernel is generated. Each line has kernel name, kernel parameters and counter values. By option ‘—stats’ the kernel execution stats can be generated in CSV format. Currently profiling has limitation of serializing submitted kernels.
+
+GPU profiling is controlled with input file which defines a list of metrics/counters and a profiling scope. An input file is provided using option `‘-i <input file>’`. Output CSV file with a line per submitted kernel is generated. Each line has kernel name, kernel parameters and counter values. By option ‘—stats’ the kernel execution stats can be generated in CSV format. Currently profiling has limitation of serializing submitted kernels.
 An example of input file:
 ```
    # Perf counters group 1
@@ -42,6 +48,7 @@ ROCPRofiler: 1 contexts collected, output directory /tmp/rpl_data_191018_011134_
 RPL: '/…./MatrixTranspose/input.csv' is generated
 ```
 #### 2.1.1.	Counters and metrics
+
 There are two profiling features, metrics and traces. Hardware performance counters are treated as the basic metrics and the formulas can be defined for derived metrics.
 Counters and metrics can be dynamically configured using XML configuration files with counters and metrics tables:
  - Counters table entry, basic metric: counter name, block name, event id
@@ -68,6 +75,7 @@ Metrics XML File Example:
 </global>
 ```
 ##### 2.1.1.1. Metrics query
+
 Available counters and metrics can be queried by options ‘—list-basic’ for counters and ‘—list-derived’ for derived metrics. The output for counters indicates number of block instances and number of block counter registers. The output for derived metrics prints the metrics expressions.
 Examples:
 ```
