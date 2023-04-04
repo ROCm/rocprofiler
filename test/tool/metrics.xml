@@ -95,6 +95,8 @@
   <metric name="TCC_EA_WRREQ_sum" expr=sum(TCC_EA_WRREQ,32) descr="Number of transactions (either 32-byte or 64-byte) going over the TC_EA_wrreq interface. Sum over TCC instances."></metric>
   <metric name="TCC_EA_WRREQ_64B_sum" expr=sum(TCC_EA_WRREQ_64B,32) descr="Number of 64-byte transactions going (64-byte write or CMPSWAP) over the TC_EA_wrreq interface. Sum over TCC instances."></metric>
   <metric name="TCC_WRREQ_STALL_max" expr=max(TCC_EA_WRREQ_STALL,32) descr="Number of cycles a write request was stalled. Max over TCC instances."></metric>
+  <metric name="FETCH_SIZE" expr=(TCC_EA_RDREQ_32B_sum*32+(TCC_EA_RDREQ_sum-TCC_EA_RDREQ_32B_sum)*64)/1024 descr="The total kilobytes fetched from the video memory. This is measured with all extra fetches and any cache or memory effects taken into account."></metric>
+  <metric name="WRITE_SIZE" expr=((TCC_EA_WRREQ_sum-TCC_EA_WRREQ_64B_sum)*32+TCC_EA_WRREQ_64B_sum*64)/1024 descr="The total kilobytes written to the video memory. This is measured with all extra fetches and any cache or memory effects taken into account."></metric>
 </gfx908_expr>
 
 <gfx90a_expr>
