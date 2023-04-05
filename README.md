@@ -64,7 +64,7 @@ To enable verbose tracing:
 $ export ROCPROFILER_TRACE=1
 ```
 
-## ROC Profiler library version 2.0
+## ROC Profiler library version 9.0
 
 ## Introduction
 
@@ -248,6 +248,11 @@ The user has two options for building:
       - Adavced thread tracer plugin: advanced hardware traces data in binary format.
       - Grafana plugin: streaming the data to Prometheus and Jaeger services, so that it can be used by Grafana ROCProfilerV2 dashboard, for more details please refer to [Grafana Plugin Documentation](plugins/grafana/README.md)
 
+      installtion:
+      ```bash
+      rocprofiler-plugins_9.0.0-local_amd64.deb
+      rocprofiler-plugins-9.0.0-local.x86_64.rpm
+      ``` 
       usage:
 
       ```bash
@@ -290,13 +295,44 @@ The user has two options for building:
 
   - memorytests (standalone): This includes running address sanitizer for memory leaks, corruptions.
 
-- Documentation: We make use of doxygen to autmatically generate API documentation. Generated document can be found in the following path:
+  installation:
+  ```bash
+  rocprofiler-tests_9.0.0-local_amd64.deb
+  rocprofiler-tests-9.0.0-local.x86_64.rpm
+  ```
+  usage:
+  From build directory:
+  ```bash
+  ./run_tests.sh OR make -j check
+  ```
+
+## Documentation:
+We make use of doxygen to autmatically generate API documentation. Generated document can be found in the following path:
 
    ```bash
    # ROCM_PATH by default is /opt/rocm
    # It can be set by the user in different location if needed.
    <ROCM_PATH>/share/doc/rocprofv2
    ```
+
+   installtion:
+   ```bash
+   rocprofiler-docs_9.0.0-local_amd64.deb
+   rocprofiler-docs-9.0.0-local.x86_64.rpm
+   ```
+## Samples
+
+- Profiling: Profiling Samples depending on replay mode
+- Tracing: Tracing Samples
+
+insalltion:
+```bash
+rocprofiler-samples_9.0.0-local_amd64.deb
+rocprofiler-samples-9.0.0-local.x86_64.rpm
+```
+usage:
+
+samples can be run as independent executables once installed
 
 ## Project Structure
 
