@@ -18,7 +18,7 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE. */
 
-#include "rocprofiler.h"
+#include <rocprofiler.h>
 
 #include <cassert>
 #include <condition_variable>

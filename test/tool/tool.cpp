@@ -51,7 +51,7 @@ THE SOFTWARE.
 #include <vector>
 #include <algorithm>
 
-#include "inc/rocprofiler.h"
+#include "rocprofiler/rocprofiler.h"
 #include "util/hsa_rsrc_factory.h"
 #include "util/xml.h"
 

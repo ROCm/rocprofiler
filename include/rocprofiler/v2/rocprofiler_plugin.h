@@ -44,7 +44,7 @@
 
 #include <stdint.h>
 
-#include "rocprofiler.h"
+#include "rocprofiler/v2/rocprofiler.h"
 
 #ifdef __cplusplus
 extern "C" {

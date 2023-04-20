@@ -1,0 +1,2 @@
+OUTPUT_FORMAT(elf64-x86-64)
+INPUT(librocprofiler64.so.2)

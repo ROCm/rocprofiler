@@ -23,7 +23,7 @@ THE SOFTWARE.
 #ifndef SRC_CORE_CONTEXT_POOL_H_
 #define SRC_CORE_CONTEXT_POOL_H_
 
-#include "inc/rocprofiler.h"
+#include "include/rocprofiler/rocprofiler.h"
 
 #include <thread>
 

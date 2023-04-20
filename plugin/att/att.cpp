@@ -41,8 +41,8 @@
 #include <mutex>
 #include <sys/stat.h>
 
-#include "rocprofiler.h"
-#include "rocprofiler_plugin.h"
+#include <rocprofiler.h>
+#include <rocprofiler_plugin.h>
 #include "../utils.h"
 
 namespace {

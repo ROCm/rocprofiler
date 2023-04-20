@@ -25,8 +25,8 @@
 #include <cstdlib>
 #include <experimental/filesystem>
 
-#include "rocprofiler.h"
-#include "rocprofiler_plugin.h"
+#include <rocprofiler.h>
+#include <rocprofiler_plugin.h>
 
 #include "barectf.h"
 #include "barectf_tracer.h"

@@ -23,8 +23,8 @@
 #include <iostream>
 #include <experimental/filesystem>
 
-#include "rocprofiler.h"
-#include "rocprofiler_plugin.h"
+#include <rocprofiler.h>
+#include <rocprofiler_plugin.h>
 
 #include "plugin.h"
 

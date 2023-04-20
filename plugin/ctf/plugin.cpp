@@ -38,8 +38,8 @@
 #include <hip/hip_runtime.h>
 #include <hip/amd_detail/hip_prof_str.h>
 
-#include "rocprofiler.h"
-#include "rocprofiler_plugin.h"
+#include <rocprofiler.h>
+#include <rocprofiler_plugin.h>
 #include "../utils.h"
 
 #include "barectf.h"

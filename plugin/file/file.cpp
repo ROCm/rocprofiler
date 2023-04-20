@@ -40,8 +40,8 @@
 #include <hsa/hsa.h>
 #include <mutex>
 
-#include "rocprofiler.h"
-#include "rocprofiler_plugin.h"
+#include <rocprofiler.h>
+#include <rocprofiler_plugin.h>
 #include "../utils.h"
 
 namespace fs = std::experimental::filesystem;

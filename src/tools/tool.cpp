@@ -18,15 +18,13 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE. */
 
-#define ROCPROFILER_V2
-
 #include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <hsa/hsa.h>
 #include <hsa/hsa_api_trace.h>
-#include <rocprofiler.h>
-#include <rocprofiler_plugin.h>
+#include "rocprofiler.h"
+#include "rocprofiler_plugin.h"
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <sys/ipc.h>
@@ -54,7 +52,6 @@
 #include <thread>
 #include <chrono>
 
-#include "rocprofiler.h"
 #include "utils/helper.h"
 
 namespace fs = std::experimental::filesystem;
