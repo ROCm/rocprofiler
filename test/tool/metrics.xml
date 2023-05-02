@@ -97,10 +97,7 @@
   <metric name="TCC_WRREQ_STALL_max" expr=max(TCC_EA_WRREQ_STALL,32) descr="Number of cycles a write request was stalled. Max over TCC instances."></metric>
 </gfx908_expr>
 
-<gfx90a_expr>
-  <metric name="TA_BUSY_avr"                                            expr=avr(TA_TA_BUSY,16) descr="TA block is busy. Average over TA instances."></metric>
-  <metric name="TA_BUSY_max"                                            expr=max(TA_TA_BUSY,16) descr="TA block is busy. Max over TA instances."></metric>
-  <metric name="TA_BUSY_min"                                            expr=min(TA_TA_BUSY,16) descr="TA block is busy. Min over TA instances."></metric>
+<gfx90a_expr base="gfx9_expr">
   <metric name="TA_TA_BUSY_sum"                                         expr=sum(TA_TA_BUSY,16) descr="TA block is busy. Perf_Windowing not supported for this counter. Sum over TA instances."></metric>
   <metric name="TA_TOTAL_WAVEFRONTS_sum"                                expr=sum(TA_TOTAL_WAVEFRONTS,16) descr="Total number of wavefronts processed by TA. Sum over TA instances."></metric>
   <metric name="TA_ADDR_STALLED_BY_TC_CYCLES_sum"                       expr=sum(TA_ADDR_STALLED_BY_TC_CYCLES,16) descr="Number of cycles addr path stalled by TC. Perf_Windowing not supported for this counter. Sum over TA instances."></metric>
@@ -108,7 +105,6 @@
   <metric name="TA_DATA_STALLED_BY_TC_CYCLES_sum"                       expr=sum(TA_DATA_STALLED_BY_TC_CYCLES,16) descr="Number of cycles data path stalled by TC. Perf_Windowing not supported for this counter. Sum over TA instances."></metric>
   <metric name="TA_FLAT_WAVEFRONTS_sum"                                 expr=sum(TA_FLAT_WAVEFRONTS,16) descr="Number of flat opcode wavfronts processed by the TA. Sum over TA instances."></metric>
   <metric name="TA_FLAT_READ_WAVEFRONTS_sum"                            expr=sum(TA_FLAT_READ_WAVEFRONTS,16) descr="Number of flat opcode reads processed by the TA. Sum over TA instances."></metric>
-  <metric name="TA_FLAT_WRITE_WAVEFRONTS_sum"                           expr=sum(TA_FLAT_WRITE_WAVEFRONTS,16) descr="Number of flat opcode writes processed by the TA. Sum over TA instances."></metric>
   <metric name="TA_FLAT_ATOMIC_WAVEFRONTS_sum"                          expr=sum(TA_FLAT_ATOMIC_WAVEFRONTS,16) descr="Number of flat opcode atomics processed by the TA. Sum over TA instances."></metric>
   <metric name="TA_BUFFER_WAVEFRONTS_sum"                               expr=sum(TA_BUFFER_WAVEFRONTS,16) descr="Number of buffer wavefronts processed by TA. Sum over TA instances."></metric>
   <metric name="TA_BUFFER_READ_WAVEFRONTS_sum"                          expr=sum(TA_BUFFER_READ_WAVEFRONTS,16) descr="Number of buffer read wavefronts processed by TA. Sum over TA instances."></metric>
@@ -209,10 +205,6 @@
   <metric name="TCC_ALL_TC_OP_INV_EVICT_sum"                            expr=sum(TCC_ALL_TC_OP_INV_EVICT,32) descr="Number of evictions due to all TC_OP invalidate requests. Sum over TCC instances."></metric>
   <metric name="TCC_EA_RDREQ_DRAM_sum"                                  expr=sum(TCC_EA_RDREQ_DRAM,32) descr="Number of TCC/EA read requests (either 32-byte or 64-byte) destined for DRAM (MC). Sum over TCC instances."></metric>
   <metric name="TCC_EA_WRREQ_DRAM_sum"                                  expr=sum(TCC_EA_WRREQ_DRAM,32) descr="Number of TCC/EA write requests (either 32-byte of 64-byte) destined for DRAM (MC). Sum over TCC instances."></metric>
-  
-  <metric name="FETCH_SIZE"                                             expr=(TCC_EA_RDREQ_32B_sum*32+(TCC_EA_RDREQ_sum-TCC_EA_RDREQ_32B_sum)*64)/1024 descr="The total kilobytes fetched from the video memory. This is measured with all extra fetches and any cache or memory effects taken into account."></metric>
-  <metric name="WRITE_SIZE"                                             expr=((TCC_EA_WRREQ_sum-TCC_EA_WRREQ_64B_sum)*32+TCC_EA_WRREQ_64B_sum*64)/1024 descr="The total kilobytes written to the video memory. This is measured with all extra fetches and any cache or memory effects taken into account."></metric>
-  <metric name="WRITE_REQ_32B"                                          expr=TCC_EA_WRREQ_64B_sum*2+(TCC_EA_WRREQ_sum-TCC_EA_WRREQ_64B_sum) descr="The total number of 32-byte effective memory writes."></metric>
 </gfx90a_expr>
 
 <gfx10_expr>

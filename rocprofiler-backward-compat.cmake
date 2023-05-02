@@ -48,7 +48,18 @@ function(create_header_template)
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
    THE SOFTWARE.
-   */\n\n#ifndef @include_guard@\n#define @include_guard@ \n\n#pragma message(\"This file is deprecated. Use file from include path /opt/rocm-ver/include/ and prefix with rocprofiler\")\n@include_statements@ \n\n#endif")
+   */
+#ifndef @include_guard@
+#define @include_guard@
+
+#if defined(__GNUC__)
+#warning \"This file is deprecated. Use file from include path /opt/rocm-ver/include/ and prefix with rocprofiler\"
+#else
+#pragma message(\"This file is deprecated. Use file from include path /opt/rocm-ver/include/ and prefix with rocprofiler\")
+#endif
+
+@include_statements@
+#endif")
 endfunction()
 
 #use header template file and generate wrapper header files
@@ -129,17 +140,27 @@ function(create_library_symlink)
                     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                     COMMAND ${CMAKE_COMMAND} -E create_symlink
                     ../../${CMAKE_INSTALL_LIBDIR}/${ROCPROFILER_NAME}/${METRICS} ${ROCPROF_WRAPPER_LIB_DIR}/${METRICS})
+
+  set(GFX_METRICS "gfx_metrics.xml")
+  add_custom_target(link_gfx_metrics ALL
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                    COMMAND ${CMAKE_COMMAND} -E create_symlink
+                    ../../${CMAKE_INSTALL_LIBDIR}/${ROCPROFILER_NAME}/${GFX_METRICS} ${ROCPROF_WRAPPER_LIB_DIR}/${GFX_METRICS})
 endfunction()
 
 #Creater a template for header file
 create_header_template()
 #Use template header file and generater wrapper header files
 generate_wrapper_header()
-install(DIRECTORY ${ROCPROF_WRAPPER_INC_DIR} DESTINATION ${ROCPROFILER_NAME})
+install(DIRECTORY ${ROCPROF_WRAPPER_INC_DIR} DESTINATION ${ROCPROFILER_NAME} COMPONENT dev)
 # Create symlink to binaries
 create_binary_symlink()
-install(DIRECTORY ${ROCPROF_WRAPPER_BIN_DIR} DESTINATION ${ROCPROFILER_NAME})
+install(DIRECTORY ${ROCPROF_WRAPPER_BIN_DIR} DESTINATION ${ROCPROFILER_NAME} COMPONENT runtime)
 create_library_symlink()
-install(DIRECTORY ${ROCPROF_WRAPPER_LIB_DIR} DESTINATION ${ROCPROFILER_NAME})
+install(DIRECTORY ${ROCPROF_WRAPPER_LIB_DIR} DESTINATION ${ROCPROFILER_NAME}
+        COMPONENT runtime
+        PATTERN ${ROCPROFILER_LIBRARY}.so EXCLUDE)
+install(FILES ${ROCPROF_WRAPPER_LIB_DIR}/${ROCPROFILER_LIBRARY}.so DESTINATION ${ROCPROFILER_NAME}/lib
+        COMPONENT dev)
 #install tools directory
-install(DIRECTORY ${ROCPROF_WRAPPER_TOOL_DIR} DESTINATION ${ROCPROFILER_NAME})
+install(DIRECTORY ${ROCPROF_WRAPPER_TOOL_DIR} DESTINATION ${ROCPROFILER_NAME} COMPONENT runtime)
