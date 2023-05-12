@@ -4,18 +4,15 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-import re
+import subprocess
 
 from rocm_docs import ROCmDocs
 
 
-file = open("../CMakeLists.txt")
-text = file.read()
-name_matches = re.findall("set \( ROCPROFILER_NAME.*", text)
-name = re.findall(r'"([^"]*)"', name_matches[0])[0]
-version_matches = re.findall("get_version.*", text)
-version = re.findall(r'"([^"]*)"', version_matches[0])[0]
-file.close()
+get_name = r'sed -n -e "s/^project(\([A-Za-z-]\+\).*/\1/p" ../CMakeLists.txt'
+get_version = r'sed -n -e "s/^project(.* \([0-9\.]\{1,\}\).*/\1/p" ../CMakeLists.txt'
+name = subprocess.getoutput(get_name)
+version = subprocess.getoutput(get_version)
 if len(version) > 0:
     name = f"{name} {version} Documentation"
 
