@@ -5,4 +5,4 @@ subtrees:
   - numbered: False
     entries:
     - file: rocprofiler_spec
-    - file: api
+    - file: doxygen/docBin/html/index
