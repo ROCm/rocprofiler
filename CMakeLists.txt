@@ -441,40 +441,12 @@ if(${LIBRARY_TYPE} STREQUAL SHARED)
 endif()
 
 find_package(Doxygen)
-
 if(DOXYGEN_FOUND)
-  # # Set input and output files
-  set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in)
-  set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
-
-  # # Request to configure the file
-  configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
-
   add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/doc/html/index.html
-           ${CMAKE_CURRENT_BINARY_DIR}/doc/latex/refman.pdf
-    COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
-    COMMAND make -C ${CMAKE_CURRENT_BINARY_DIR}/doc/latex pdf
-    MAIN_DEPENDENCY ${DOXYGEN_OUT}
-    ${DOXYGEN_IN}
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/inc/rocprofiler.h
-            ${CMAKE_CURRENT_SOURCE_DIR}/inc/rocprofiler_plugin.h
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/docs/_build
+    COMMAND pip3 install -r docs/sphinx/requirements.txt
+    COMMAND python3 -m sphinx -T -E -b html -d docs/_build/doctrees -D language=en docs docs/_build/html
     COMMENT "Generating documentation")
 
-  add_custom_target(
-    doc DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/doc/html/index.html
-                ${CMAKE_CURRENT_BINARY_DIR}/doc/latex/refman.pdf)
-
-  install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/doc/latex/refman.pdf"
-    DESTINATION ${CMAKE_INSTALL_DOCDIR}
-    RENAME "${PROJECT_NAME}.pdf"
-    OPTIONAL
-    COMPONENT docs)
-
-  install(
-    DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/doc/html/"
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/html/${PROJECT_NAME}
-    OPTIONAL
-    COMPONENT docs)
+  add_custom_target(doc DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/docs/_build)
 endif()

@@ -7,26 +7,9 @@ The information presented in this document is for informational purposes only an
 ## ROC Profiler library version 1.0
 
 ## Introduction
-
 Profiling with metrics and traces based on perfcounters (PMC) and traces (SPM).
 Implementation is based on AqlProfile HSA extension.
 Library supports GFX8/GFX9.
-
-### How to build documentation
-
-Run the steps below to build documentation locally.
-
-```
-cd docs
-
-pip3 install -r .sphinx/requirements.txt
-
-python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
-```
-
-## Metrics
-
-[The link to profiler default metrics XML specification](test/tool/metrics.xml)
 
 The library source tree:
  - doc  - Documentation
@@ -324,7 +307,8 @@ The user has two options for building:
   ```
 
 ## Documentation:
-We make use of doxygen to autmatically generate API documentation. Generated document can be found in the following path:
+
+We make use of doxygen to automatically generate API documentation. Generated document can be found in the following path:
 
    ```bash
    # ROCM_PATH by default is /opt/rocm
@@ -337,6 +321,15 @@ We make use of doxygen to autmatically generate API documentation. Generated doc
    rocprofiler-docs_9.0.0-local_amd64.deb
    rocprofiler-docs-9.0.0-local.x86_64.rpm
    ```
+
+Run the steps below to build Sphinx documentation locally.
+
+```
+cd docs
+pip3 install -r sphinx/requirements.txt
+python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
+```
+
 ## Samples
 
 - Profiling: Profiling Samples depending on replay mode
