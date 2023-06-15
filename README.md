@@ -373,3 +373,8 @@ samples can be run as independent executables once installed
 Please report in the Github Issues
 
 ## Limitations
+- In 5.6, Navi2x requires a GRBM counter as the first counter for input PMC lines. Results are undefined otherwise.
+- Navi requires a stable power state for counter collection. Currently this state needs to be set by the user.
+  To do so, set "power_dpm_force_performance_level" to be writeable for non-root users with chmod, then:
+  echo profile_standard >> /sys/class/drm/card0/device/power_dpm_force_performance_level
+  Recommended: "auto" or "high" for ATT and "profile_standard" for PMC. Use rocm-smi to verify the current power state.
