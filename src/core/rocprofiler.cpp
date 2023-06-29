@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 *******************************************************************************/
 
-#include "inc/rocprofiler.h"
+#include "rocprofiler.h"
 
 #include <hsa/hsa.h>
 #include <string.h>
@@ -398,11 +398,6 @@ ROCPROFILER_EXPORT extern const uint32_t HSA_AMD_TOOL_PRIORITY = 25;
 PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, uint64_t failed_tool_count,
                        const char* const* failed_tool_names) {
   ONLOAD_TRACE_BEG();
-  if (started) rocmtools::fatal("HSA Tool started already!");
-  started = true;
-  if (!getenv("ROCP_TOOL_LIB") && !getenv("ROCP_HSA_INTERCEPT")) {
-    rocmtools::hsa_support::Initialize(table);
-  } else {
     rocprofiler::SaveHsaApi(table);
     rocprofiler::ProxyQueue::InitFactory();
 
@@ -469,20 +464,14 @@ PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, uint64_t fa
     ONLOAD_TRACE("end intercept_mode(" << std::hex << intercept_env_value << ")"
                                        << " intercept_mode_mask(" << std::hex << intercept_mode_mask
                                        << ")" << std::dec);
-  }
   return true;
 }
 
 // HSA-runtime tool on-unload method
 PUBLIC_API void OnUnload() {
   ONLOAD_TRACE_BEG();
-  if (!started) rocmtools::fatal("HSA Tool hasn't started yet!");
-  if (!getenv("ROCP_TOOL_LIB") && !getenv("ROCP_HSA_INTERCEPT")) {
-    rocmtools::hsa_support::Finalize();
-  } else {
     rocprofiler::UnloadTool();
     rocprofiler::RestoreHsaApi();
-  }
   ONLOAD_TRACE_END();
 }
 
@@ -755,7 +744,7 @@ PUBLIC_API hsa_status_t rocprofiler_iterate_info(
   rocprofiler::util::HsaRsrcFactory* hsa_rsrc = &rocprofiler::util::HsaRsrcFactory::Instance();
   rocprofiler_info_data_t info{};
   info.kind = kind;
-  uint32_t agent_idx = 0;
+  uint32_t agent_idx = hsa_rsrc->GetCountOfCpuAgents();
   uint32_t agent_max = 0;
   const rocprofiler::util::AgentInfo* agent_info = NULL;
 

@@ -52,11 +52,18 @@ function(create_header_template)
 #ifndef @include_guard@
 #define @include_guard@
 
+#ifndef ROCM_HEADER_WRAPPER_WERROR
+#define ROCM_HEADER_WRAPPER_WERROR @deprecated_error@
+#endif
+#if ROCM_HEADER_WRAPPER_WERROR  /* ROCM_HEADER_WRAPPER_WERROR 1 */
+#error \"This file is deprecated. Use file from include path /opt/rocm-ver/include/ and prefix with rocprofiler\"
+#else      /* ROCM_HEADER_WRAPPER_WERROR 0 */
 #if defined(__GNUC__)
-#warning \"This file is deprecated. Use file from include path /opt/rocm-ver/include/ and prefix with rocprofiler\"
+#error \"This file is deprecated. Use file from include path /opt/rocm-ver/include/ and prefix with rocprofiler\"
 #else
 #pragma message(\"This file is deprecated. Use file from include path /opt/rocm-ver/include/ and prefix with rocprofiler\")
 #endif
+#endif /* ROCM_HEADER_WRAPPER_WERROR */
 
 @include_statements@
 #endif")
@@ -66,7 +73,7 @@ endfunction()
 function(generate_wrapper_header)
   file(MAKE_DIRECTORY ${ROCPROF_WRAPPER_INC_DIR})
   #find all header files from inc
-  file(GLOB include_files ${CMAKE_CURRENT_SOURCE_DIR}/inc/*.h)
+  file(GLOB include_files ${CMAKE_CURRENT_SOURCE_DIR}/include/rocprofiler/*.h)
   #Convert the list of files into #includes
   foreach(header_file ${include_files})
      #set include  guard

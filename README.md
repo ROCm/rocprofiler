@@ -13,7 +13,9 @@ Library supports GFX8/GFX9.
 
 The library source tree:
  - doc  - Documentation
- - inc/rocprofiler.h - Library public API
+ - include/rocprofiler/rocprofiler.h - Library public API
+ - include/rocprofiler/v2/rocprofiler.h - V2 Beta Library public API
+ - include/rocprofiler/v2/rocprofiler_plugins.h - V2 Beta Tool's Plugins Library public API
  - src  - Library sources
    - core - Library API sources
    - util - Library utils sources
@@ -89,8 +91,9 @@ ROCProfilerV2 is a newly developed design for AMD’s tooling infrastructure tha
 
 - Makecache
 - Gtest Development Package (Ubuntu: libgtest-dev)
-- Cppheaderparser Python 3 Package
-- Lxml Python 3 Package
+- Cppheaderparser Python3 Package
+- Lxml Python3 Package
+- Barectf Python3 Package (has to be installed using pip not OS artifactory)
 
 ### Build
 
@@ -102,16 +105,17 @@ The user has two options for building:
 
   ```bash
   # Normal Build
-  ./build.sh --build
+  ./build.sh --build OR ./build.sh -b
   # Clean Build
-  ./build.sh --clean-build
+  ./build.sh --clean-build OR ./build.sh -cb
   ```
 
   - Optionally, For testing, run the following
 
   ```bash
-  ./rocprofv2 -t
+  cd build && ./rocprofv2 -t
   ```
+  For more information on tests, please see the Tests section
 
 - Option 2 (Where ROCM_PATH envronment need to be set with the current installation directory of rocm), run the following:
 
@@ -127,7 +131,7 @@ The user has two options for building:
 
   # Optionally, for building API documentation
   cmake --build . -- doc
-
+  
   # Optionally, for building packages (DEB, RPM, TGZ)
   cmake --build . -- package
   ```
@@ -156,12 +160,12 @@ The user has two options for building:
   ```bash
   cmake --build . -- check
   ```
+  For more information on tests, please see the Tests section
 
-## Usage
 
-### Features
+## Features & Usage
 
-- Tools:
+### Tool:
 
   - rocsys: This is a frontend command line utility to launch/start/stop/exit a session with the required application to be traced or profiled in rocprofv2 context. Usage:
 
@@ -178,9 +182,6 @@ The user has two options for building:
     # Exit a session with a given identifier created at launch
     rocsys –session session_name exit
     ```
-
-  - Device Profiling: A device profiling session allows the user to profile the GPU device for counters irrespective of the running applications on the GPU. This is different from application profiling. device profiling session doesn't care about the host running processes and threads. It directly provides low level profiling information.
-
   - rocprofv2:
 
     - Counters and Metric Collection: HW counters and derived metrics can be collected using following option:
@@ -218,7 +219,7 @@ The user has two options for building:
       ```bash
       rocprofv2 --help
       ```
-    - Advanced Thread Trace: It can collect kernel running time, granular hardware metrics per kernel dispatch and provide hotspot analysis at source code level via hardware tracing.
+    - (ATT) Advanced Thread Trace: It can collect kernel running time, granular hardware metrics per kernel dispatch and provide hotspot analysis at source code level via hardware tracing.
 
       ```bash
       # ATT(Advanced Thread Trace) needs few proeconditions before running.
@@ -226,7 +227,7 @@ The user has two options for building:
       export HIPCC_COMPILE_FLAGS_APPEND="--save-temps -g"
 
       #2. Install plugin package
-      rocprofiler-plugins_2.0.0-local_amd64.deb
+      see Plugin Support section for installation
 
       #3. Additionally you might need to install few python packages.e.g:
       pip3 install websockets
@@ -238,7 +239,7 @@ The user has two options for building:
       # app_assembly_file_relative_path is the assembly file with .s extension generated in 1st step
       # app_relative_path is the path for the application binary
       # input.txt gives flexibility to to target the compute unit and provide filters.
-            # input.txt contents: att: TARGET_CU=0
+            # input.txt contents: att: TARGET_CU=0 
       # att needs 2 ports opened (8000, 18000), In case the browser is running on a different machine.
       ```
 
@@ -246,21 +247,23 @@ The user has two options for building:
       - file plugin: outputs the data in txt files.
       - Perfetto plugin: outputs the data in protobuf format.
       - Adavced thread tracer plugin: advanced hardware traces data in binary format.
-      - Grafana plugin: streaming the data to Prometheus and Jaeger services, so that it can be used by Grafana ROCProfilerV2 dashboard, for more details please refer to [Grafana Plugin Documentation](plugins/grafana/README.md)
+      - ctf plugin: Outputs the data in ctf format(a binary trace format)
 
       installtion:
       ```bash
       rocprofiler-plugins_9.0.0-local_amd64.deb
       rocprofiler-plugins-9.0.0-local.x86_64.rpm
-      ```
+      ``` 
       usage:
 
       ```bash
-      # plugin_name can be file, perfetto, att or grafana
+      # plugin_name can be file, perfetto , ctf
       ./rocprofv2 --plugin plugin_name -i samples/input.txt <app_relative_path>
       ```
 
 - Profile Replay Modes: Different replay modes are provided for flexibility to support kernel profiling. The API provides functionality for profiling GPU applications in kernel and application and user mode and also with no replay mode at all and it provides the records pool support with an easy sequence of calls, so the user can be able to profile and trace in easy small steps. Currently, Kernel replay mode is the only supported mode.
+
+- Device Profiling: A device profiling session allows the user to profile the GPU device for counters irrespective of the running applications on the GPU. This is different from application profiling. device profiling session doesn't care about the host running processes and threads. It directly provides low level profiling information.
 
 - Session Support: A session is a unique identifier for a profiling/tracing/pc-sampling task. A ROCProfilerV2 Session has enough information about what needs to be collected or traced and it allows the user to start/stop profiling/tracing whenever required. A simple session API usage:
 
@@ -277,7 +280,7 @@ The user has two options for building:
 
    // profile a kernel -kernelA
    hipLaunchKernelGGL(kernelA, dim3(1), dim3(1), 0, 0);
-
+   
    // Deactivating session
    rocprofiler_terminate_session(session_id);
 
@@ -288,7 +291,8 @@ The user has two options for building:
    rocprofiler_finalize();
    ```
 
-- Quality Control: We make use of the GoogleTest (Gtest) framework to automatically find and add test cases to the CMAKE testing environment. ROCProfilerV2 testing is categorized as following:
+ ## Tests: 
+ We make use of the GoogleTest (Gtest) framework to automatically find and add test cases to the CMAKE testing environment. ROCProfilerV2 testing is categorized as following:
   - unittests (Gtest Based) : These includes tests for core classes. Any newly added functionality should have a unit test written to it.
 
   - featuretests (standalone and Gtest Based): These includes both API tests and tool tests. Tool is tested against different applications to make sure we have right output in evry run.
@@ -364,13 +368,13 @@ samples can be run as independent executables once installed
 - Tests: Tests folder
 - CMakeLists.txt: Handles cmake list for the whole project
 
-## Samples
-
-- Profiling: Profiling Samples depending on replay mode
-- Tracing: Tracing Samples
-
 ## Support
 
 Please report in the Github Issues
 
 ## Limitations
+- In 5.6, Navi2x requires a GRBM counter as the first counter for input PMC lines. Results are undefined otherwise.
+- Navi requires a stable power state for counter collection. Currently this state needs to be set by the user.
+  To do so, set "power_dpm_force_performance_level" to be writeable for non-root users with chmod, then:
+  echo profile_standard >> /sys/class/drm/card0/device/power_dpm_force_performance_level
+  Recommended: "auto" or "high" for ATT and "profile_standard" for PMC. Use rocm-smi to verify the current power state.

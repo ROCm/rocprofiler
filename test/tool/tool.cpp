@@ -51,7 +51,7 @@ THE SOFTWARE.
 #include <vector>
 #include <algorithm>
 
-#include "inc/rocprofiler.h"
+#include "rocprofiler/rocprofiler.h"
 #include "util/hsa_rsrc_factory.h"
 #include "util/xml.h"
 
@@ -1170,6 +1170,12 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
   gpu_index_vec = new std::vector<uint32_t>;
   get_xml_array(xml, "top.metric", "gpu_index", ",", gpu_index_vec, "  ");
   
+  // Skipping cpu count to get to correct gpu index
+  const uint32_t cpu_count = HsaRsrcFactory::Instance().GetCountOfCpuAgents();
+  std::transform(gpu_index_vec->begin(), gpu_index_vec->end(),
+                 gpu_index_vec->begin(),
+                 [&](int count) { return count + cpu_count; });
+
   // Skipping cpu count to get to correct gpu index
   const uint32_t cpu_count = HsaRsrcFactory::Instance().GetCountOfCpuAgents();
   std::transform(gpu_index_vec->begin(), gpu_index_vec->end(),

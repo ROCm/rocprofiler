@@ -21,7 +21,7 @@
 #ifndef SRC_CORE_HSA_QUEUES_QUEUE_H_
 #define SRC_CORE_HSA_QUEUES_QUEUE_H_
 
-#include "inc/rocprofiler.h"
+#include "rocprofiler.h"
 
 #include <hsa/hsa.h>
 #include <hsa/hsa_api_trace.h>
@@ -42,6 +42,9 @@ namespace rocmtools {
 void InitKsymbols();
 void FinitKsymbols();
 void AddKernelName(uint64_t handle, std::string kernel_name);
+void RemoveKernelName(uint64_t handle);
+void AddKernelNameWithDispatchID(std::string name, uint64_t id);
+std::string GetKernelNameUsingDispatchID(uint64_t given_id);
 std::string GetKernelNameFromKsymbols(uint64_t handle);
 uint32_t GetCurrentActiveInterruptSignalsCount();
 
