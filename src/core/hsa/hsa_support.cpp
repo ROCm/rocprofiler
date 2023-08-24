@@ -496,6 +496,25 @@ hsa_status_t ExecutableDestroyIntercept(hsa_executable_t executable) {
   return rocprofiler::hsa_support::GetCoreApiTable().hsa_executable_destroy_fn(executable);
 }
 
+hsa_status_t GetDispatchTimestamps(hsa_agent_t agent, hsa_signal_t signal,
+                                   hsa_amd_profiling_dispatch_time_t* time) {
+  hsa_status_t status = HSA_STATUS_SUCCESS;
+  {
+    std::lock_guard<std::mutex> lock(rocprofiler::GetROCProfilerSingleton()->signals_timestamps_map_lock);
+    if (rocprofiler::GetROCProfilerSingleton()->signals_timestamps.find(signal.handle) !=
+        rocprofiler::GetROCProfilerSingleton()->signals_timestamps.end()) {
+      hsa_signal_t new_signal = rocprofiler::GetROCProfilerSingleton()->signals_timestamps[signal.handle];
+      rocprofiler::GetROCProfilerSingleton()->signals_timestamps.erase(signal.handle);
+      status = rocprofiler::hsa_support::GetAmdExtTable().hsa_amd_profiling_get_dispatch_time_fn(
+          agent, new_signal, time);
+    } else {
+      status = rocprofiler::hsa_support::GetAmdExtTable().hsa_amd_profiling_get_dispatch_time_fn(
+          agent, signal, time);
+    }
+    return status;
+  }
+}
+
 std::atomic<bool> profiling_async_copy_enable{false};
 
 hsa_status_t ProfilingAsyncCopyEnableIntercept(bool enable) {
@@ -952,6 +971,9 @@ void Initialize(HsaApiTable* table) {
       roctracer::hsa_support::AgentsAllowAccessIntercept;
   table->core_->hsa_executable_freeze_fn = roctracer::hsa_support::ExecutableFreezeIntercept;
   table->core_->hsa_executable_destroy_fn = roctracer::hsa_support::ExecutableDestroyIntercept;
+
+  table->amd_ext_->hsa_amd_profiling_get_dispatch_time_fn =
+      roctracer::hsa_support::GetDispatchTimestamps;
 
   // Install the HSA_API wrappers
   roctracer::hsa_support::detail::InstallCoreApiWrappers(table->core_);

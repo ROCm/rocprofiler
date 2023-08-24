@@ -22,6 +22,7 @@
 
 #include <atomic>
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 #include <utility>
@@ -410,7 +411,7 @@ bool AsyncSignalHandler(hsa_signal_value_t signal_value, void* data) {
         return true;
       hsa_amd_profiling_dispatch_time_t time;
       hsa_support::GetAmdExtTable().hsa_amd_profiling_get_dispatch_time_fn(
-          queue_info_session->agent, pending->original_signal, &time);
+          queue_info_session->agent, pending->new_signal, &time);
       uint32_t record_count = 1;
       bool is_individual_xcc_mode = false;
       uint32_t xcc_count = queue_info_session->xcc_count;
@@ -481,8 +482,8 @@ bool AsyncSignalHandler(hsa_signal_value_t signal_value, void* data) {
         }
         delete pending->context;
       }
-      if (pending->new_signal.handle)
-        hsa_support::GetCoreApiTable().hsa_signal_destroy_fn(pending->new_signal);
+      // if (pending->new_signal.handle)
+      //   hsasupport_singleton.GetCoreApiTable().hsa_signal_destroy_fn(pending->new_signal);
       if (queue_info_session->interrupt_signal.handle)
         hsa_support::GetCoreApiTable().hsa_signal_destroy_fn(queue_info_session->interrupt_signal);
     }
@@ -553,8 +554,11 @@ bool AsyncSignalHandlerATT(hsa_signal_value_t /* signal */, void* data) {
 
 void CreateBarrierPacket(const hsa_signal_t& packet_completion_signal,
                          std::vector<Packet::packet_t>* transformed_packets) {
-  hsa_barrier_and_packet_t barrier{0};
-  barrier.header = HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE;
+  hsa_barrier_and_packet_t barrier{};
+  barrier.header = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
+      (1 << HSA_PACKET_HEADER_BARRIER) |
+      (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
+      (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
   barrier.dep_signal[0] = packet_completion_signal;
   void* barrier_ptr = &barrier;
   transformed_packets->emplace_back(*reinterpret_cast<Packet::packet_t*>(barrier_ptr));
@@ -855,6 +859,7 @@ void WriteInterceptor(const void* packets, uint64_t pkt_count, uint64_t user_pkt
       uint64_t correlation_id = dispatch_packet.reserved2;
 
       CreateSignal(HSA_AMD_SIGNAL_AMD_GPU_ONLY, &packet.completion_signal);
+
       // Adding the dispatch packet newly created signal to the pending signals
       // list to be processed by the signal interrupt
       rocprofiler_kernel_properties_t kernel_properties =
@@ -865,28 +870,36 @@ void WriteInterceptor(const void* packets, uint64_t pkt_count, uint64_t user_pkt
                                     record_id);
         if (session_data_count > 0 && profile.second) {
           session->GetProfiler()->AddPendingSignals(
-              writer_id, record_id, original_packet.completion_signal,
-              dispatch_packet.completion_signal, session_id, buffer_id, profile.first,
-              session_data_count, profile.second, kernel_properties, (uint32_t)syscall(__NR_gettid),
-              user_pkt_index, correlation_id);
+              writer_id, record_id, original_packet.completion_signal, packet.completion_signal,
+              session_id, buffer_id, profile.first, session_data_count, profile.second,
+              kernel_properties, (uint32_t)syscall(__NR_gettid), user_pkt_index, correlation_id);
         } else {
           session->GetProfiler()->AddPendingSignals(
-              writer_id, record_id, original_packet.completion_signal,
-              dispatch_packet.completion_signal, session_id, buffer_id, nullptr, session_data_count,
-              nullptr, kernel_properties, (uint32_t)syscall(__NR_gettid), user_pkt_index,
-              correlation_id);
+              writer_id, record_id, original_packet.completion_signal, packet.completion_signal,
+              session_id, buffer_id, nullptr, session_data_count, nullptr, kernel_properties,
+              (uint32_t)syscall(__NR_gettid), user_pkt_index, correlation_id);
         }
       }
 
       // Make a copy of the original packet, adding its signal to a barrier
       // packet and create a new signal for it to get timestamps
       if (original_packet.completion_signal.handle) {
-        hsa_barrier_and_packet_t barrier{0};
-        barrier.header = HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE;
+        hsa_barrier_and_packet_t barrier{};
+        barrier.header = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
+            (1 << HSA_PACKET_HEADER_BARRIER) |
+            (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
+            (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
         Packet::packet_t* __attribute__((__may_alias__)) pkt =
             (reinterpret_cast<Packet::packet_t*>(&barrier));
         transformed_packets.emplace_back(*pkt).completion_signal =
             original_packet.completion_signal;
+
+        {
+          std::lock_guard<std::mutex> lock(
+              rocprofiler::GetROCProfilerSingleton()->signals_timestamps_map_lock);
+          rocprofiler::GetROCProfilerSingleton()->signals_timestamps[original_packet.completion_signal.handle] =
+              packet.completion_signal;
+        }
       }
 
       hsa_signal_t interrupt_signal{};
@@ -907,8 +920,11 @@ void WriteInterceptor(const void* packets, uint64_t pkt_count, uint64_t user_pkt
         // Added Interrupt Signal with barrier and provided handler for it
         CreateBarrierPacket(interrupt_signal, &transformed_packets);
       } else {
-        hsa_barrier_and_packet_t barrier{0};
-        barrier.header = HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE;
+        hsa_barrier_and_packet_t barrier{};
+        barrier.header = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
+            (1 << HSA_PACKET_HEADER_BARRIER) |
+            (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
+            (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
         barrier.completion_signal = interrupt_signal;
         Packet::packet_t* __attribute__((__may_alias__)) pkt =
             (reinterpret_cast<Packet::packet_t*>(&barrier));
@@ -989,6 +1005,7 @@ void WriteInterceptor(const void* packets, uint64_t pkt_count, uint64_t user_pkt
       auto& dispatch_packet = reinterpret_cast<hsa_kernel_dispatch_packet_t&>(packet);
 
       CreateSignal(HSA_AMD_SIGNAL_AMD_GPU_ONLY, &packet.completion_signal);
+
       // Adding the dispatch packet newly created signal to the pending signals
       // list to be processed by the signal interrupt
       rocprofiler_kernel_properties_t kernel_properties =
@@ -999,7 +1016,7 @@ void WriteInterceptor(const void* packets, uint64_t pkt_count, uint64_t user_pkt
       if (session && profile) {
         session->GetAttTracer()->AddPendingSignals(
             writer_id, record_id, original_packet.completion_signal,
-            dispatch_packet.completion_signal, session_id_snapshot, buffer_id, profile,
+            packet.completion_signal, session_id_snapshot, buffer_id, profile,
             kernel_properties, (uint32_t)syscall(__NR_gettid), user_pkt_index);
       } else {
         session->GetAttTracer()->AddPendingSignals(
@@ -1012,6 +1029,7 @@ void WriteInterceptor(const void* packets, uint64_t pkt_count, uint64_t user_pkt
       if (original_packet.completion_signal.handle) {
         hsa_barrier_and_packet_t barrier{0};
         barrier.header = HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE;
+        barrier.dep_signal[0] = packet.completion_signal;
         Packet::packet_t* __attribute__((__may_alias__)) pkt =
             (reinterpret_cast<Packet::packet_t*>(&barrier));
         transformed_packets.emplace_back(*pkt).completion_signal =

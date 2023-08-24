@@ -85,6 +85,9 @@ class ROCProfiler_Singleton {
   uint64_t GetUniqueRecordId();
   uint64_t GetUniqueKernelDispatchId();
 
+  std::mutex signals_timestamps_map_lock;
+  std::map<uint64_t, hsa_signal_t> signals_timestamps;
+
  private:
   rocprofiler_session_id_t current_session_id_{0};
   std::mutex session_map_lock_;

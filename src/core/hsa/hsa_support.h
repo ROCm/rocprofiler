@@ -28,6 +28,7 @@
 #include <hsa/hsa_ven_amd_loader.h>
 
 #include <atomic>
+#include <cstdint>
 #include <string>
 
 #include "hsa_common.h"
