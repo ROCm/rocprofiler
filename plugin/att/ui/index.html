@@ -12,11 +12,10 @@
 
 		<div style="order: 1px solid lightblue; overflow:auto; width: calc(min(100% - 350px, 1400px));">
 			<div class="tab">
-				<button class="tablinks" onclick="showImage('timeline.png')">Wave States</button>
 				<button class="tablinks" onclick="showImage('occupancy.png')">Occupancy</button>
 				<button class="tablinks" onclick="showImage('counters.png')" id="counterspng_button">Counters</button>
 			</div>
-			<img id="GraphImage" src=timeline.png width=100%>
+			<img id="GraphImage" src=occupancy.png width=100%>
 		</div>
 
 		<div id="ma_nav">
@@ -32,9 +31,7 @@
 	<div id="Buttons" display="inline-block" style="overflow:scroll; max-width: calc(100% - 370px); height: 150px; z-index: 9999;">
 		<div id="GH_select"></div>
 		<div id="SE_select"></div>
-		<div id="SM_select"></div>
-		<div id="WSL_select"></div>
-		<div id="WID_select"></div>
+		<div id="TR_select"></div>
 	</div>
 	<div id="map" style="position: absolute; top:570px; width: 100%;">
 		<div id="flexbox">
@@ -178,17 +175,9 @@
 			closeAllDropDownsExcept(0);
 			document.getElementById("SE_dropdown").classList.toggle("show");
 		}
-		function dropDownSM() {
+		function dropDownTR() {
 			closeAllDropDownsExcept(1);
-			document.getElementById("SM_dropdown").classList.toggle("show");
-		}
-		function dropDownWSL() {
-			closeAllDropDownsExcept(2);
-			document.getElementById("WSL_dropdown").classList.toggle("show");
-		}
-		function dropDownWID() {
-			closeAllDropDownsExcept(3);
-			document.getElementById("WID_dropdown").classList.toggle("show");
+			document.getElementById("TR_dropdown").classList.toggle("show");
 		}
 
 		function ButtonHtml(id, onc_func, name, index) {
@@ -199,23 +188,17 @@
 				slot_name = index
 			return '<button class="btn" id="'+id+index+'" onclick="'+onc_func+'('+index+')">'+slot_name+'</button>'
 		}
-		function WaveButtonHtml(index) {
-			return ButtonHtml("wid_button", "FetchNamesAndGather", "ID", index)
+		function TRButtonHtml(index) {
+			return ButtonHtml("tr_button", "FetchNamesAndGather", "ID", index)
 		}
 		function SEButonHtml(index) {
-			return ButtonHtml("se_button", "OpenSIMDView", "Shader", index)
-		}
-		function SIMDButonHtml(index) {
-			return ButtonHtml("sm_button", "OpenWSLView", "SIMD", index)
-		}
-		function WSLButonHtml(index) {
-			return ButtonHtml("wsl_button", "OpenWIDView", "Slot", index)
+			return ButtonHtml("se_button", "OpenTRView", "Shader", index)
 		}
 		function GraphButtonHtml(index, name) {
 			return '\n<input type="checkbox" id="gh_button' + index + '" onclick="UpdGraph(this, '+index+')" checked=true>'+name
 		}
 
-		var global_imagename = "timeline.png"
+		var global_imagename = "occupancy.png"
 		var graph_selected_counters = {};
 		function UpdImageSrc(imgname) {
 			if (imgname != null)
@@ -243,14 +226,10 @@
 		var HTML_MINI = document.getElementById("minimap").innerHTML
 		var HTML_IMAG = document.getElementById("Images").innerHTML
 		var SE_BTN_HTML = ""
-		var SM_BTN_HTML = ""
-		var WSL_BTN_HTML = ""
-		var WID_BTN_HTML = ""
+		var TR_BTN_HTML = ""
 
 		var current_SE = 0
-		var current_SM = 0
-		var current_WSL = 0
-		var current_WID = 0
+		var current_TR = 0
 		var filename_data = {}
 		var clock_scale = 1
 
@@ -273,75 +252,32 @@
 			document.getElementById("map").innerHTML = ""
 			document.getElementById("minimap").innerHTML = ""
 			document.getElementById('SE_select').innerHTML = SE_BTN_HTML
-			document.getElementById('SM_select').innerHTML = ""
-			document.getElementById('WSL_select').innerHTML = ""
-			document.getElementById('WID_select').innerHTML = ""
+			document.getElementById('TR_select').innerHTML = ""
 
 			for(var se in filename_data)
-			for(var sm in filename_data[se])
-			for(var wsl in filename_data[se][sm])
-			for(var wid in filename_data[se][sm][wsl]) {
-				OpenSIMDView(se)
-				OpenWSLView(sm)
-				OpenWIDView(wsl)
-				FetchNamesAndGather(wid)
+			for(var tr in filename_data[se]) {
+				OpenTRView(se)
+				FetchNamesAndGather(tr)
 				return
 			}
 		})
 
-		function OpenSIMDView(se_index) {
+		function OpenTRView(se_index) {
 			if(document.getElementById('se_button'+current_SE) != null)
 				document.getElementById('se_button'+current_SE).style.backgroundColor = "#D7D7D7"
 			document.getElementById('se_button'+se_index).style.backgroundColor = "white"
 			document.getElementById("SE_BTN_DROP").textContent = 'Shader: ' + se_index
 			current_SE = se_index
 
-			SM_BTN_HTML = 	'<div class="dropdown">\
-							<button onclick="dropDownSM()" class="dropbtn" id="SM_BTN_DROP">SIMD</button>\
-							<div id="SM_dropdown" class="dropdown-content">'
+			TR_BTN_HTML = 	'<div class="dropdown">\
+							<button onclick="dropDownTR()" class="dropbtn" id="TR_BTN_DROP">Trace</button>\
+							<div id="TR_dropdown" class="dropdown-content">'
 			for(var i in filename_data[current_SE]) {
-				SM_BTN_HTML = SM_BTN_HTML + SIMDButonHtml(i)
+				TR_BTN_HTML = TR_BTN_HTML + TRButtonHtml(i)
 			}
-			SM_BTN_HTML += '</div></div>'
+			TR_BTN_HTML += '</div></div>'
 
-			document.getElementById('SM_select').innerHTML = SM_BTN_HTML
-			document.getElementById('WSL_select').innerHTML = ""
-			document.getElementById('WID_select').innerHTML = ""
-		}
-		function OpenWSLView(sm_index) {
-			if(document.getElementById('sm_button'+current_SM) != null)
-				document.getElementById('sm_button'+current_SM).style.backgroundColor = "#D7D7D7"
-			document.getElementById('sm_button'+sm_index).style.backgroundColor = "white"
-			document.getElementById("SM_BTN_DROP").textContent = 'SIMD: ' + sm_index
-			current_SM = sm_index
-
-			WSL_BTN_HTML = 	'<div class="dropdown">\
-							<button onclick="dropDownWSL()" class="dropbtn" id="WSL_BTN_DROP">WaveSlot</button>\
-							<div id="WSL_dropdown" class="dropdown-content">'
-			for(var i in filename_data[current_SE][current_SM]) {
-				WSL_BTN_HTML = WSL_BTN_HTML + WSLButonHtml(i)
-			}
-			WSL_BTN_HTML += '</div></div>'
-
-			document.getElementById('WSL_select').innerHTML = WSL_BTN_HTML
-			document.getElementById('WID_select').innerHTML = ""
-		}
-		function OpenWIDView(sl_index) {
-			if(document.getElementById('wsl_button'+current_WSL) != null)
-				document.getElementById('wsl_button'+current_WSL).style.backgroundColor = "#D7D7D7"
-			document.getElementById('wsl_button'+sl_index).style.backgroundColor = "white"
-			document.getElementById("WSL_BTN_DROP").textContent = 'WaveSlot: ' + sl_index
-			current_WSL = sl_index
-
-			WID_BTN_HTML = 	'<div class="dropdown">\
-							<button onclick="dropDownWID()" class="dropbtn" id="WID_BTN_DROP">WaveID</button>\
-							<div id="WID_dropdown" class="dropdown-content">'
-			for(var i in filename_data[current_SE][current_SM][current_WSL]) {
-				WID_BTN_HTML = WID_BTN_HTML + WaveButtonHtml(i)
-			}
-			WID_BTN_HTML += '</div></div>'
-
-			document.getElementById('WID_select').innerHTML = WID_BTN_HTML
+			document.getElementById('TR_select').innerHTML = TR_BTN_HTML
 		}
 
 		function ApplyLiveImage() {
@@ -379,20 +315,21 @@
 		}
 
 		function FetchNamesAndGather(wave_index) {
-			if(document.getElementById('wid_button'+current_WID) != null)
-				document.getElementById('wid_button'+current_WID).style.backgroundColor = "#D7D7D7"
-			document.getElementById("WID_BTN_DROP").textContent = 'WaveID: ' + wave_index
-			document.getElementById('wid_button'+wave_index).style.backgroundColor = "white"
-			current_WID = wave_index
+			console.log('FetchNamesAndGather')
+			if(document.getElementById('tr_button'+current_TR) != null)
+				document.getElementById('tr_button'+current_TR).style.backgroundColor = "#D7D7D7"
+			document.getElementById("TR_BTN_DROP").textContent = 'TraceID: ' + wave_index
+			document.getElementById('tr_button'+wave_index).style.backgroundColor = "white"
+			current_TR = wave_index
 
 			document.getElementById("ma_code").innerHTML = HTML_MAC
 			document.getElementById("map").innerHTML = HTML_MAP
 			document.getElementById("minimap").innerHTML = HTML_MINI
 			document.getElementById("Images").innerHTML = HTML_IMAG
 
-			showImage('timeline.png')
-			console.log('SE:',current_SE,' sm:', current_SM, 'wsl:', current_WSL, 'wid:',current_WID)
-			console.log('Fetch', filename_data[current_SE][current_SM][current_WSL][current_WID])
+			showImage('occupancy.png')
+			console.log('SE:',current_SE, 'trace:',current_TR)
+			console.log('Fetch', filename_data[current_SE][current_TR])
 
 			//GatherData(filename_data[current_SE][current_SM][current_WV][0][0])
 
@@ -401,23 +338,17 @@
 				catch { document.getElementById("counterspng_button").disabled = true; }
 			})
 
-			GatherCUWavesData(filename_data[current_SE][current_SM][current_WSL][current_WID])
+			GatherCUWavesData(filename_data[current_SE][current_TR])
 		}
 
 		var cuwaves_data = []
-		function GatherCUWavesData(wave_to_gather) {
+		function GatherCUWavesData(file_to_gather) {
 			shader = filename_data[current_SE]
-			file_to_gather = wave_to_gather[0]
-			wave_start = wave_to_gather[1]
-			wave_end = wave_to_gather[2]
 
 			wavelist = []
-			for (var sm in shader)
-			for (var wsl in shader[sm])
-			for (var wid in shader[sm][wsl]) {
-				wv = shader[sm][wsl][wid]
-				if (wv[1] < wave_end && wv[2] > wave_start)
-					wavelist.push([wv[0], wv[1], wv[2], sm, wsl, wid])
+			for (var tr in shader) {
+				wv = shader[tr]
+				wavelist.push([wv, tr])
 			}
 			cuwaves_data = []
 			LoopOverList(file_to_gather, wavelist, 0)
@@ -426,14 +357,9 @@
 			if (index >= wavelist.length) {
 				GatherData(file_to_gather)
 			} else {
-				wave_sel = wavelist[index]
-				fetch(wave_sel[0]).then(response => response.json()).then(data => {
-					if (cuwaves_data.length == 0 || cuwaves_data[cuwaves_data.length-1][0] != wave_sel[3] || cuwaves_data[cuwaves_data.length-1][1] != wave_sel[4]) {
-						cuwaves_data.push([wave_sel[3], wave_sel[4], [wave_sel[5], wave_sel[1], wave_sel[2]], data.wave.instructions, data.wave.timeline])
-					} else {
-						cuwaves_data[cuwaves_data.length-1][3].concat(data.wave.instructions)
-						cuwaves_data[cuwaves_data.length-1][4].concat(data.wave.timeline)
-					}
+				wave_sel = wavelist[index][0]
+				fetch(wave_sel).then(response => response.json()).then(data => {
+					cuwaves_data.push([wave_sel, data.wave.instructions])
 					LoopOverList(file_to_gather, wavelist, index+1)
 				})
 			}
@@ -446,7 +372,6 @@
 			fetch(file_to_gather, {cache: "no-store"})
 				.then(response => response.json())
 				.then(data => {
-				console.log("Requestd:", file_to_gather)
 
 				fetch('code.json', {cache: "no-store"})
 				.then(response => response.json())
@@ -459,15 +384,13 @@
 					let L2FirstToken = {}
 					let L2InstTime = {}
 					insts.forEach((ins, i) => {
-						const line_num = ins[4]
+						const line_num = ins[3]
 						if (!(line_num in L2FirstToken)) {
-							L2FirstToken[line_num] = ins[0]
+							L2FirstToken[line_num] = ins[4]
 						}
 						if (!(line_num in L2InstTime)) {
-							L2InstTime[line_num] = [ins[2], ins[3]] // issue2inst, inst exec time
+							L2InstTime[line_num] = [ins[0], ins[2]] // num waves, inst exec time
 						}
-						// handle dual issue
-						ins[5] = (i > 0 && ins[0] == insts[i-1][0]) ?  insts[i-1][5] + 1 : 0
 					})
 
 					const isInViewport = (el) => {
@@ -480,189 +403,6 @@
 						)
 					}
 
-					const what = d3.select('#what').append('svg')
-						.attr('width', '100%')
-						.attr('height', 100)
-						.append('g')
-					what.append('text')
-						.attr('x', 3)
-						.attr('y', 40)
-						.attr("font-family", "sans-serif")
-						.text('TRACE:')
-					what.append('text')
-						.attr('x', 68)
-						.attr('y', 40)
-						.attr("font-family", "sans-serif")
-						.attr('font-weight', 600)
-						.attr('fill', '#1F51FF')
-						.text(data.name)
-					// SIMD view
-					let simd_mode = false
-					const simd_button = what.append('rect')
-						.attr('x', 1)
-						.attr('y', 64)
-						.attr('rx', 4)
-						.attr('ry', 4)
-						.attr('width', 40)
-						.attr('height', 16)
-						.attr('fill', 'lightgray')
-					what.append('text')
-						.attr('x', 5)
-						.attr('y', 76)
-						.attr("font-family", "sans-serif")
-						.attr("font-size", "0.8em")
-						.text('SIMD')
-						//.attr('fill', 'white')
-						.style('cursor', 'pointer')
-						.on('click', () => {
-							if (simd_mode) {
-								simd_mode = false
-								simd_button.attr('fill', 'lightgray')
-								WAVE.transition()
-									.duration(800)
-									.attr('height', HEIGHT)
-									.on('end', () => {
-										d3.select('nav').style('visibility', 'visible')
-									})
-								d3.select('#SIMD').empty()
-							} else {
-								simd_mode = true
-								simd_button.attr('fill', '#03AC13') // '#597D35')
-								d3.select('nav').style('visibility', 'hidden')
-								WAVE.transition()
-									.duration(1000)
-									.attr('height', HEIGHT * (1 + data.simd_waves.length))
-									.ease(d3.easeLinear)
-								show_simd()
-							}
-					})
-
-					// wave => simd
-					what.append("path")
-						.attr("d", 'M 16 95 L 24 95 L 20 86 Z')
-						.attr("fill", "#0096FF")
-
-					let saved_cu_waves = null
-
-					const render_cu = () => {
-						d3.select('#map').style('visibility', 'hidden')
-						d3.select('#ma_code').style('visibility', 'hidden')
-						d3.select('nav').style('visibility', 'hidden')
-						d3.select('#Images').style('visibility', 'hidden')
-						d3.select('#Buttons').style('visibility', 'hidden')
-						d3.select("#minimap").style('visibility', 'hidden')
-						d3.select("#arrows").style('visibility', 'hidden')
-						const container = d3.select('body')
-							.insert("div",":first-child")
-							.attr('id', 'cu')
-						if (saved_cu_waves) {
-							container.append(() => saved_cu_waves.node())
-
-							if (scroll_to) {
-								const target = 'cu-' + wav.simd + '-' + wav.slot + '-' + scroll_to
-								const token = d3.select('#'+target).node()
-								token.scrollIntoView({
-									behavior: "smooth", inline: "start", block: "center"
-								})
-							}
-						} else {
-							//console.time("CU Rendering")
-							const kill_cu_div = container.append("div")
-							const kill_cu = kill_cu_div.append('svg')
-								.attr('width', 200)
-								.attr('height', 20)
-							kill_cu.append('rect')
-								.attr('x', 2)
-								.attr('y', 2)
-								.attr('rx', 4)
-								.attr('ry', 4)
-								.attr('width', 42)
-								.attr('height', 16)
-								.attr('fill', 'lightgray')
-							kill_cu.append('text')
-								.attr('x', 6)
-								.attr('y', 14)
-								.attr("font-family", "sans-serif")
-								.attr("font-size", "0.8em")
-								.text('return')
-								//.attr('fill', 'white')
-								.style('cursor', 'pointer')
-								.on('click', () => {
-									saved_cu_waves = d3.select('#cu').remove()
-									d3.select('#map').style('visibility', 'visible')
-									d3.select('#ma_code').style('visibility', 'visible')
-									d3.select('#Images').style('visibility', 'visible')
-									d3.select('#Buttons').style('visibility', 'visible')
-									d3.select("#minimap").style('visibility', 'visible')
-									d3.select("#arrows").style('visibility', 'visible')
-									if (simd_mode) {
-										d3.select('nav').style('visibility', 'hidden')
-									} else {
-										d3.select('nav').style('visibility', 'visible')
-									}
-									cu_button.style('fill', 'lightgray')
-									d3.select('#loading').remove()
-								})
-
-							const cu_waves_div = container.append("div")
-								.attr('id', 'cu_wave')
-							const CU = cu_waves_div.append('svg')
-								.attr('id', 'CU')
-								.attr('width', WIDTH)
-								.attr('height', cuwaves_data.length * CU_HEIGHT + MARGIN)
-								.append('g')
-							CU.append('rect')
-								.attr('x', 0)
-								.attr('y', 0)
-								.attr('width', '100%')
-								.attr('height', '100%')
-								.attr("fill", "black")
-								.attr("opacity", 0.3)
-
-							show_cu()
-							//console.timeEnd("CU Rendering")
-						}
-					}
-
-					const cu_button = what.append('rect')
-						.attr('x', 80)
-						.attr('y', 64)
-						.attr('rx', 4)
-						.attr('ry', 4)
-						.attr('width', 28)
-						.attr('height', 16)
-						.attr('fill', 'lightgray')
-					what.append('text')
-						.attr('x', 84)
-						.attr('y', 76)
-						.attr("font-family", "sans-serif")
-						.attr("font-size", "0.8em")
-						.text('CU')
-						.style('cursor', 'pointer')
-						.on('click', () => {
-							//jb
-							cu_button.transition()
-								.ease(d3.easeBounce)
-								.duration(100)
-								.style('fill', '#03AC13')
-							what.append('text')
-								.attr('id', 'loading')
-								.attr('x', 110)
-								.attr('y', 76)
-								.attr("font-family", "sans-serif")
-								.attr("font-size", "0.9em")
-								.attr('fill', '	#228B22')
-								.text('loading ...')
-
-							setTimeout(() => { render_cu() }, 100)
-					})
-
-					// simd => cu
-					what.append("path")
-						.attr("d", 'M 60 68 L 60 74 L 70 71 Z')
-						.attr("fill", "#0096FF")
-
-					
 					d3.select('#top_n')
 						.selectAll("li")
 						.data(code_data.top_n)
@@ -678,8 +418,8 @@
 								d3.select('.top_n_' + line_num).classed("highlight", true)
 								src_line = d3.select('.line_' + line_num).node()
 								scroll_to = L2FirstToken[line_num]
-								const token_id = "token" + scroll_to
-								const token = d3.select('#'+token_id).node()
+								const token_id = "#token" + Math.floor(10*L2FirstToken[line_num])
+								const token = d3.select(token_id).node()
 								// scrolling not consistent without the timer
 								setTimeout(() => {
 									token.scrollIntoView({behavior: "smooth", inline: "start"})
@@ -713,9 +453,8 @@
 								d3.selectAll(".highlight").classed("highlight", false)
 								d3.select('.line_' + line_num).classed("highlight", true)
 
-								scroll_to = L2FirstToken[line_num]
-								const token = "token" + scroll_to
-								const el = d3.select('#'+token).node()
+								const token = "#token" + Math.floor(10*L2FirstToken[line_num])
+								const el = d3.select(token).node()
 								el.scrollIntoView({behavior: "smooth", inline: "start"})
 							}
 						})
@@ -723,7 +462,18 @@
 							const LEFT_JUST = 58
 							const spacing = SP.repeat(Math.max(2, LEFT_JUST - d.data[0].length))
 							const line_num = String(i).padStart(4, SP);
-							return line_num + ' ' + d.data[0] + spacing
+							//return line_num + ' ' + d.data[0] + spacing
+							let exec_count = String(d.data[6])
+							let exec_cycles = String(d.data[7])
+
+							if (i == 0) {
+								exec_count = 'Exec'
+								exec_cycles = 'Cycles'
+							}
+
+							exec_count = exec_count.padStart(5, SP);
+							exec_cycles = exec_cycles.padStart(7, SP);
+							return exec_count + ' ' + exec_cycles + ' ' + d.data[0] + spacing
 						})
 						.attr('class', (d,i) => { return 'line_' + i })
 						.classed('clickable', (d,i) => { return (i in L2FirstToken) })
@@ -774,15 +524,13 @@
 							const line_num = d.data[4]
 							if (line_num in L2InstTime) {
 								times = L2InstTime[line_num]
-								return times[0] + ' cycles, ' + times[1] + ' cycles'
+								return times[0] + ' exec, ' + times[1] + ' cycles'
 							}
 						})
 
 					canvas_waitcnt = data.wave.waitcnt
 
-					const START_TIME = insts[0][0]
 					const DURATION = data.duration * clock_scale
-					const END_TIME = START_TIME + DURATION
 
 					const NUM_BINS = 20
 					const MINI_WIDTH = 360
@@ -809,7 +557,7 @@
 					let y = d3.scaleLinear()
 						.range([MINI_HEIGHT, MINI_MARGIN])
 					let histogram = d3.bin()
-						.value(function(d) { return d[0] - START_TIME})
+						.value(function(d) { return d[0] })
 						.domain(x.domain())
 						.thresholds(x.ticks(NUM_BINS))
 
@@ -817,7 +565,7 @@
 					y.domain([0, d3.max(bins, function(d) { return d.length })])
 					bins.splice(0, 0, bins[0]) // duh
 
-					minisvg.selectAll("rect")
+					/*minisvg.selectAll("rect")
 						.data(bins)
 						.enter().append("rect")
 						.attr("fill", "steelblue")
@@ -831,7 +579,7 @@
 						.attr("height", function(d) { return MINI_HEIGHT - y(d.length) })
 						.style("cursor", "pointer")
 						.append("svg:title")
-						.text((d) => { return d.length + ' OP(s)'})
+						.text((d) => { return d.length + ' OP(s)'}) */
 
 					minisvg.append("g")
 						.attr("transform", "translate(0," + MINI_HEIGHT + ")")
@@ -854,10 +602,10 @@
 					const WIDTH = 2 * DURATION
 					const HEIGHT = 50
 					const CU_HEIGHT = 45
-					const MARGIN = 30
+					const MARGIN = 0
 					const PADDING = 3
 					const scaleX = d3.scaleLinear()
-						.domain([START_TIME, START_TIME + data.duration * clock_scale + MARGIN])
+						.domain([0, data.duration * clock_scale + MARGIN])
 						.range([MARGIN, WIDTH-MARGIN])
 					const toX = (x) => { return Math.ceil(scaleX(x)*clock_scale) }
 
@@ -869,6 +617,7 @@
 						4: ["STALL", "red"],
 					}
 					const INST_TYPE = {
+						0: ["NONE", "#ebff00"],
 						1: ["SMEM", "#ebff00"],
 						2: ["SALU", "#99ff99"],
 						3: ["VMEM", "#feb72a"],
@@ -891,7 +640,6 @@
 								})
 						})
 
-					//d3.select("#wave").select("svg").remove()
 					const WAVE = d3.select("#wave")
 						.append("svg")
 						.attr("width", WIDTH)
@@ -904,276 +652,51 @@
 						.attr("opacity", 0.7)
 
 					const OPS = WAVE.append("svg").append("g")
-					const SIMD = WAVE.append("svg").append("g")
-						.attr('id', 'SIMD')
-					const wav_slot = OPS.append('text')
-						.attr('x', 2)
-						.attr('y', 28)
-						.attr("font-family", "sans-serif")
-						.attr("font-size", "1em")
-						.text(wav.simd + '-' + wav.slot)
-						.attr('fill', 'white')
-						.style("cursor", "pointer")
-					const wav_info = d3.select('#wave')
-						.append('div')
-						.style("position", "absolute")
-						.style("visibility", "hidden")
-						.style("background-color", "white")
-						.style("border", "solid")
-						.style("border-width", "1px")
-						.style("padding", "5px")
-						.html('<p>' + 'wave:' + wav.id + SP + SP +
-							'start:' + wav.begin + SP + SP +
-							'end:' + wav.end
-							+ '<p><pre>' + wav.info + '</pre>')
-
-					wav_slot
-						.on("mouseover", () => {
-							return wav_info.style("visibility", "visible")
-						}).on("mousemove", () => {
-							return wav_info.style("top", "50px")
-								.style("left", "25px")
-						}).on("mouseout", () => {
-							return wav_info.style("visibility", "hidden")
-						})
-
 					let last_color = null
 					OPS.selectAll("rect")
 						.data(insts)
 						.enter()
 						.append('rect')
-						.attr("width", 7)
+						//.attr("width", (d) => { return Math.floor(clock_scale*d[5]*2/1.01) })
+						.attr("width", (d) => { return toX(d[5]-0.3) })
 						.attr("height", 23)
-						.attr("id", (d) => { return "token" + d[0]})
-						.attr("x", (d) => { return toX(d[0]) })
-						.attr("y", (d) => { return 10 - 6 * d[5] }) // handle dual issue
+						.attr("id", (d) => { return "token" + Math.floor(10*d[4])})
+						.attr("x", (d) => { return toX(d[4]) })
+						.attr("y", (d) => { return 10 })
 						.attr("rx", 2)
 						.attr("fill", (d) => { return INST_TYPE[d[1]][1] })
 						.style("cursor", "pointer")
 						.datum((d) => { return {data:d} })
-						.on('mouseenter', (d) => {
-							if (d) {
-								try {
-									const token = d3.select(d.toElement)
-									last_color = token.attr('fill')
-									token.attr('fill', '#e0115f')
-									let token_data = token.datum().data
-									d3.select(".highlight") .classed("highlight", false)
-									d3.select('.line_' + token_data[4]) .classed("highlight", true)
-									src_line = d3.select('.line_' + token_data[4]).node()
-									const inView = isInViewport(src_line)
-									if (!inView) {
-										src_line.scrollIntoView({behavior: "smooth", block: "start"})
-									}
-								} catch {}
-							}
-						})
-						.on("mouseleave", (d) => {
-							if (d) {
-								d3.select(d.fromElement) .attr("fill", last_color)
+						.on('mouseenter', (e, d) => {
+							try {
 								d3.select(".highlight") .classed("highlight", false)
-							}
+								d3.select('.line_' + d.data[3]).classed("highlight", true)
+								const token = d3.select(d.toElement)
+								last_color = token.attr('fill')
+								token.attr('fill', '#e0115f')
+							} catch {}
+						})
+						.on("mouseleave", (e, d) => {
+							try {
+								//d3.select(".highlight").classed("highlight", false)
+								d3.select(d.fromElement) .attr("fill", last_color)
+							} catch {}
+						})
+						.on('click', (e, d) => {
+							try {
+								d3.select('.line_' + d.data[3]).classed("highlight", true)
+								src_line = d3.select('.line_' + d.data[3]).node()
+								const inView = isInViewport(src_line)
+								if (!inView) {
+									src_line.scrollIntoView({behavior: "smooth", block: "start"})
+								}
+							} catch {}
 						})
 						.append("svg:title")
 						.text((d) => {
 							d = d.data
-							return INST_TYPE[d[1]][0] + ":" + d[0]
+							return INST_TYPE[d[1]][0] + ":" + d[5]
 						})
-					const clamp_timeline = (states, curr_time) => {
-						let result = []
-						// need a filler here
-						if (curr_time > START_TIME) {
-							result.push([0, curr_time - START_TIME])
-						}
-						states.every((x) => {
-							if (curr_time >= END_TIME) return false
-
-							if (curr_time >= START_TIME) {
-								result.push(x)
-							} else if (curr_time < START_TIME && curr_time + x[1] > START_TIME) {
-								result.push([x[0], curr_time + x[1] - START_TIME])
-							}
-							curr_time += x[1]
-							return true
-						})
-						return result
-					}
-
-					const states2timeline = (states) => {
-						let timeline = []
-						let curr_time = START_TIME
-						states.forEach((d) => {
-							timeline.push([d[0], d[1], curr_time])
-							curr_time += d[1]
-						})
-						return timeline
-					}
-
-					const line = WAVE.append("svg").append("g")
-					line.selectAll("path")
-						.data(states2timeline(clamp_timeline(wav.timeline, wav.begin)))
-						.enter()
-						.append('path')
-						.style("cursor", "pointer")
-						.attr("d", (d) => {
-							return d3.line()([[toX(d[2]), 38],
-								[toX(d[2] + d[1]), 38]])
-						})
-						.attr("stroke", (d) => { return STATE_COLOR[d[0]][1] })
-						.attr("stroke-width", 5)
-						.append("svg:title")
-						.text((d) => { return STATE_COLOR[d[0]][0] + ":" + d[1]})
-
-					const waves2str = (waves) => {
-						const wavs = waves.map((w) => {
-							return 'wave:' + w[0] + SP + SP + w[1] + '-' + w[2]
-						})
-						return wavs.join('\n')
-					}
-
-					const show_simd = () => {
-						SIMD.append("rect")
-							.attr("width", WIDTH)
-							.attr("height", HEIGHT * wave_info_data.simd_waves.length)
-							.attr("x", 0)
-							.attr("y", HEIGHT)
-							.attr("fill", "black")
-							.attr("opacity", 0.3)
-						let current_height = HEIGHT
-						wave_info_data.simd_waves.forEach((wave, i) => {
-							// wave: (simd, slot, [(id, start, end)+], instructions, timeline)
-							let [simd, slot, waves] = [wave[0], wave[1], wave[2]]
-							let ins_in_range = wave[3].filter((x) => {
-								return x[0] >= START_TIME && x[0] <= END_TIME
-							})
-
-							// handle dual issue
-							ins_in_range.forEach((ins, j) => {
-								ins[4] = (j > 0 && ins[0] == ins_in_range[j-1][0])
-									? ins_in_range[j-1][4] + 1 : 0
-							})
-							const SLOT = SIMD.append('g')
-							SLOT.append('text')
-								.attr('x', 2)
-								.attr('y', 28 + current_height)
-								.attr("font-family", "sans-serif")
-								.attr("font-size", "1em")
-								.attr('fill', 'white')
-								.text(simd + '-' + slot)
-								.style("cursor", "pointer")
-								.append("svg:title")
-								.text(waves2str([waves]))
-
-							SLOT.selectAll("rect")
-								.data(ins_in_range)
-								.enter()
-								.append('rect')
-								.attr("width", 7)
-								.attr("height", 15)
-								.attr("x", (d) => { return toX(d[0]) })
-								.attr("y", (d) => { return 10 - 6 * d[4] + current_height })
-								.attr("rx", 2)
-								.attr("fill", (d) => { return INST_TYPE[d[1]][1] })
-								.style("cursor", "pointer")
-								.append("svg:title")
-								.text((d) => {
-									return INST_TYPE[d[1]][0] + ":" + d[0] + SP + "slot:" + slot
-								})
-							SLOT.selectAll("path")
-								.data(states2timeline(clamp_timeline(wave[4], wave[2][1])))
-								.enter()
-								.append('path')
-								.style("cursor", "pointer")
-								.attr("d", (d) => {
-									return d3.line()([[toX(d[2]), 28 + current_height],
-										[toX(d[2] + d[1]), 28 + current_height]])
-								})
-								.attr("stroke", (d) => { return STATE_COLOR[d[0]][1] })
-								.attr("stroke-width", 4)
-								.append("svg:title")
-								.text((d) => { return STATE_COLOR[d[0]][0] + ":" + d[1]})
-
-							current_height += HEIGHT
-						})
-					}
-
-					const show_cu = () => {
-						const CU = d3.select('#CU')
-						let current_height = 10
-						cuwaves_data.forEach((wave, i) => {
-							// wave: (simd, slot, [(id, start, end)+], instructions, timeline)
-							let [simd, slot, waves] = [wave[0], wave[1], wave[2]]
-							let ins_in_range = wave[3].filter((x) => {
-								return x[0] >= START_TIME && x[0] <= END_TIME
-							})
-
-							// handle dual issue
-							ins_in_range.forEach((ins, j) => {
-								ins[4] = (j > 0 && ins[0] == ins_in_range[j-1][0])
-									? ins_in_range[j-1][4] + 1 : 0
-							})
-							const SLOT = CU.append('g')
-							if (simd == wav.simd && slot == wav.slot) {
-								SLOT.append("rect")
-									.attr("width", WIDTH)
-									.attr("height", CU_HEIGHT)
-									.attr("x", 0)
-									.attr("y", current_height)
-									.attr("fill", "black")
-									.attr("opacity", 0.7)
-							}
-							SLOT.append('text')
-								.attr('x', 2)
-								.attr('y', 28 + current_height)
-								.attr("font-family", "sans-serif")
-								.attr("font-size", "1em")
-								.attr('fill', 'white')
-								.text(simd + '-' + slot)
-								.style("cursor", "pointer")
-								.append("svg:title")
-								.text(waves2str([waves]))
-
-							SLOT.selectAll("rect")
-								.data(ins_in_range)
-								.enter()
-								.append('rect')
-								.attr("id", (d) => { return 'cu-' + simd + '-' + slot + '-' + d[0]})
-								.attr("width", 7)
-								.attr("height", 15)
-								.attr("x", (d) => { return toX(d[0]) })
-								.attr("y", (d) => { return 10 - 6 * d[4] + current_height })
-								.attr("rx", 2)
-								.attr("fill", (d) => { return INST_TYPE[d[1]][1] })
-								.style("cursor", "pointer")
-								.append("svg:title")
-								.text((d) => {
-									return INST_TYPE[d[1]][0] + ":" + d[0] + SP +
-										"slot:" + simd + '-' + slot
-								})
-							SLOT.selectAll("path")
-								.data(states2timeline(clamp_timeline(wave[4], wave[2][1])))
-								.enter()
-								.append('path')
-								.style("cursor", "pointer")
-								.attr("d", (d) => {
-									return d3.line()([[toX(d[2]), 28 + current_height],
-										[toX(d[2] + d[1]), 28 + current_height]])
-								})
-								.attr("stroke", (d) => { return STATE_COLOR[d[0]][1] })
-								.attr("stroke-width", 4)
-								.append("svg:title")
-								.text((d) => { return STATE_COLOR[d[0]][0] + ":" + d[1]})
-							current_height += CU_HEIGHT
-						})
-
-						if (scroll_to) {
-							const target = 'cu-' + wav.simd + '-' + wav.slot + '-' + scroll_to
-							const token = d3.select('#'+target).node()
-							token.scrollIntoView({
-								behavior: "smooth", inline: "start", block: "center"
-							})
-						}
-					}
 				})
 			})
 		}

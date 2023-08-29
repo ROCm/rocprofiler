@@ -213,9 +213,9 @@ def GeneratePIC(drawinfo, selections=[True for k in range(16)], normalize=False)
     response['occupancy.png'] = states
     figures['occupancy.png'] = figure
 
-    states, figure = draw_wave_states(selections, normalize, drawinfo['TIMELINES'])
-    response['timeline.png'] = states
-    figures['timeline.png'] = figure
+    #states, figure = draw_wave_states(selections, normalize, drawinfo['TIMELINES'])
+    #response['timeline.png'] = states
+    #figures['timeline.png'] = figure
 
     if len(EVENTS) > 0 and np.sum([len(e) for e in EVENTS]) > 32:
         EVENT_NAMES, figure = draw_wave_metrics(selections, normalize, drawinfo['TIMELINES'], EVENTS, drawinfo['EVENT_NAMES'])

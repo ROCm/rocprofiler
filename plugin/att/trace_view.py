@@ -47,73 +47,44 @@ def get_top_n(code):
     return [(line_num, hitc, 0, run_time) for _, _, _, _, line_num, _, hitc, run_time in top_n]
 
 
-def wave_info(df, id):
-    dic = {
-        'Issue': df['issued_ins'][id],
-        'Valu': df['valu_ins'][id], 'Valu_stall': df['valu_stalls'][id],
-        'Salu': df['salu_ins'][id], 'Salu_stall': df['salu_stalls'][id],
-        'Vmem': df['vmem_ins'][id], 'Vmem_stall': df['vmem_stalls'][id],
-        'Smem': df['smem_ins'][id], 'Smem_stall': df['smem_stalls'][id],
-        'Flat': df['flat_ins'][id], 'Flat_stall': df['flat_stalls'][id],
-        'Lds': df['lds_ins'][id], 'Lds_stall': df['lds_stalls'][id],
-        'Br': df['br_ins'][id], 'Br_stall': df['br_stalls'][id],
-    }
-    dic['Issue_stall'] = int(np.sum([dic[key] for key in dic.keys() if '_STALL' in key]))
-    return dic
-
-
 def extract_data(df, se_number):
-    if len(df['id']) == 0 or len(df['instructions']) == 0 or len(df['timeline']) == 0:
-        return None
-
     wave_filenames = []
     flight_count = []
-    wave_slot_count = [{df['wave_slot'][wave_id]: 0 for wave_id in df['id']} for k in range(4)]
-    
-    print('Number of waves:', len(df['id']))
+    print('Number of traces:', len(df))
     allwaves_maxline = 0
 
-    for wave_id in df['id']:
-        stitched, loopCount, mem_unroll, count, maxline, num_insts = df['instructions'][wave_id]
-        timeline = df['timeline'][wave_id]
-
-        if len(stitched) == 0 or len(timeline) == 0 or len(stitched) != num_insts:
+    for wave_id, wave_data in enumerate(df):
+        print('wave_data',len(wave_data))
+        stitched, loopCount, mem_unroll, count, maxline, num_insts = wave_data
+        if len(stitched) == 0 or len(stitched) != num_insts:
             continue
 
         allwaves_maxline = max(allwaves_maxline, maxline)
         flight_count.append(count)
 
+        current_time = 0
+        for s in range(len(stitched)):
+            stitched[s] = stitched[s] + (current_time,stitched[s][2]/stitched[s][0])
+            current_time += stitched[s][-1]
         wave_entry = {
-            "id": int(df['id'][wave_id]),
-            "simd": int(df['simd'][wave_id]),
-            "slot": int(df['wave_slot'][wave_id]),
-            "begin": int(df['begin_time'][wave_id]),
-            "end": int(df['end_time'][wave_id]),
-            "info": wave_info(df, wave_id),
+            "id": wave_id,
             "instructions": stitched,
-            "timeline": timeline,
             "waitcnt": mem_unroll
         }
         data_obj = {
-            "name": 'SE'.format(se_number),
-            "duration": sum(dur for (_, dur) in timeline),
+            "name": 'SE'.format(se_number)+'-'.format(wave_id),
             "wave": wave_entry,
+            "duration": current_time,
             "loop_count": loopCount,
-            "top_n": [],
             "num_stitched": len(stitched),
             "num_insts": num_insts,
             "websocket_port": WebSocketPort,
             "generation_time": time.ctime()
         }
 
-        simd_id = df['simd'][wave_id]
-        slot_id = df['wave_slot'][wave_id]
-        slot_count = wave_slot_count[simd_id][slot_id]
-        wave_slot_count[simd_id][slot_id] += 1
-
-        OUT = 'se'+str(se_number)+'_sm'+str(simd_id)+'_sl'+str(slot_id)+'_wv'+str(slot_count)+'.json'
+        OUT = 'se'+str(se_number)+'_tr'+str(wave_id)+'.json'
         JSON_GLOBAL_DICTIONARY[OUT] = Readable(data_obj)
-        wave_filenames.append((OUT, df['begin_time'][wave_id], df['end_time'][wave_id]))
+        wave_filenames.append(OUT)
 
     data_obj = {
         "name": 'SE'.format(se_number),
@@ -240,21 +211,20 @@ def call_picture_callback(return_dict, drawinfo):
     for k, v in imagebytes.items():
         return_dict[k] = v
 
-    for n, m in enumerate(drawinfo['TIMELINES']):
-        return_dict['wstates'+str(n)+'.json'] = Readable({"data": [int(n) for n in list(np.asarray(m))]})
+    #for n, m in enumerate(drawinfo['TIMELINES']):
+    #    return_dict['wstates'+str(n)+'.json'] = Readable({"data": [int(n) for n in list(np.asarray(m))]})
     for n, e in enumerate(drawinfo['EVENTS']):
         return_dict['se'+str(n)+'_perfcounter.json'] = Readable({"data": [v.toTuple() for v in e]})
 
 
-def view_trace(args, code, dbnames, att_filenames, bReturnLoc, OCCUPANCY, bDumpOnly, se_time_begin, gfxv, drawinfo, MPI_COMM, mpi_root):
+def view_trace(args, code, dbnames, att_filenames, bReturnLoc, OCCUPANCY, bDumpOnly, gfxv, drawinfo):
     global JSON_GLOBAL_DICTIONARY
     pic_thread = None
-    if mpi_root:
-        manager = Manager()
-        return_dict = manager.dict()
-        JSON_GLOBAL_DICTIONARY['occupancy.json'] = Readable({str(k): OCCUPANCY[k] for k in range(len(OCCUPANCY))})
-        pic_thread = Process(target=call_picture_callback, args=(return_dict, drawinfo))
-        pic_thread.start()
+    manager = Manager()
+    return_dict = manager.dict()
+    JSON_GLOBAL_DICTIONARY['occupancy.json'] = Readable({str(k): OCCUPANCY[k] for k in range(len(OCCUPANCY))})
+    pic_thread = Process(target=call_picture_callback, args=(return_dict, drawinfo))
+    pic_thread.start()
 
     att_filenames = [Path(f).name for f in att_filenames]
     se_numbers = [int(a.split('_se')[1].split('.att')[0]) for a in att_filenames]
@@ -264,9 +234,6 @@ def view_trace(args, code, dbnames, att_filenames, bReturnLoc, OCCUPANCY, bDumpO
 
     allse_maxline = 0
     for se_number, dbname in zip(se_numbers, dbnames):
-        if len(dbname['id']) == 0:
-            continue
-
         count, wv_filenames, se_filename, maxline = extract_data(dbname, se_number)
         if se_filename is None:
             continue
@@ -277,44 +244,12 @@ def view_trace(args, code, dbnames, att_filenames, bReturnLoc, OCCUPANCY, bDumpO
             flight_count.append(count)
             simd_wave_filenames[se_number] = wv_filenames
 
-    if mpi_root:
-        JSON_GLOBAL_DICTIONARY['code.json'] = Readable({"code": code[:allse_maxline+16], "top_n": get_top_n(code[:allse_maxline+16])})
+    JSON_GLOBAL_DICTIONARY['code.json'] = Readable({"code": code[:allse_maxline+16], "top_n": get_top_n(code[:allse_maxline+16])})
 
-    for key in simd_wave_filenames.keys():
-        wv_array = [[
-            int(s[0].split('_sm')[1].split('_sl')[0]),
-            int(s[0].split('_sl')[1].split('_wv')[0]),
-            int(s[0].split('_wv')[1].split('.')[0]),
-            s
-        ] for s in simd_wave_filenames[key]]
-
-        wv_dict = {}
-        for wv in wv_array:
-            try:
-                wv_dict[wv[0]][wv[1]][wv[2]] = wv[3]
-            except:
-                try:
-                    wv_dict[wv[0]][wv[1]] = {wv[2]: wv[3]}
-                except:
-                    try:
-                        wv_dict[wv[0]] = {wv[1]: {wv[2]: wv[3]}}
-                    except:
-                        pass
-
-        simd_wave_filenames[key] = wv_dict
-
-    if MPI_COMM is not None:
-        se_filenames = MPI_COMM.gather(se_filenames, root=0)
-        simd_wave_filenames = MPI_COMM.gather(simd_wave_filenames, root=0)
-        if mpi_root:
-            se_filenames = [e for elem in se_filenames for e in elem]
-            simd_wave_filenames = {k:v for smf in simd_wave_filenames for k,v in smf.items()}
-
-    if mpi_root:
-        JSON_GLOBAL_DICTIONARY['filenames.json'] = Readable({"wave_filenames": simd_wave_filenames,
-                                                        "se_filenames": se_filenames,
-                                                        "global_begin_time": int(se_time_begin),
-                                                        "gfxv": gfxv})
+    JSON_GLOBAL_DICTIONARY['filenames.json'] = Readable({"wave_filenames": simd_wave_filenames,
+                                                    "se_filenames": se_filenames,
+                                                    "global_begin_time": 0,
+                                                    "gfxv": gfxv})
 
     if pic_thread is not None:
         pic_thread.join()
@@ -325,12 +260,6 @@ def view_trace(args, code, dbnames, att_filenames, bReturnLoc, OCCUPANCY, bDumpO
         return flight_count
 
     if bDumpOnly == False:
-        if MPI_COMM is not None:
-            JSON_GLOBAL_DICTIONARY = MPI_COMM.gather(JSON_GLOBAL_DICTIONARY, root=0)
-            if not mpi_root:
-                quit()
-            JSON_GLOBAL_DICTIONARY = {k:v for smf in JSON_GLOBAL_DICTIONARY for k,v in smf.items()}
-
         JSON_GLOBAL_DICTIONARY['live.json'] = Readable({'live': 1})
         if args.ports:
             assign_ports(args.ports)
@@ -345,9 +274,8 @@ def view_trace(args, code, dbnames, att_filenames, bReturnLoc, OCCUPANCY, bDumpO
             print("Exitting.")
     else:
         os.makedirs('ui/', exist_ok=True)
-        if mpi_root:
-            JSON_GLOBAL_DICTIONARY['live.json'] = Readable({'live': 0})
-            os.system('cp ' + os.path.join(os.path.abspath(os.path.dirname(__file__)),'ui') + '/* ui/' )
+        JSON_GLOBAL_DICTIONARY['live.json'] = Readable({'live': 0})
+        os.system('cp ' + os.path.join(os.path.abspath(os.path.dirname(__file__)),'ui') + '/* ui/' )
         for k, v in JSON_GLOBAL_DICTIONARY.items():
             with open(os.path.join('ui',k), 'w' if '.json' in k else 'wb') as f:
                 f.write(v.read())

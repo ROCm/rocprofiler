@@ -415,7 +415,7 @@ def stitch(insts, raw_code, jumps, gfxv):
             result.append(inst + (reverse_map[line],))
             i += 1
             num_failed_stitches = 0
-        elif not bGFX9 and inst[1] == IMMED and line != next:
+        elif not bGFX9 and inst[1] == IMMED and line != next and len(result):
             skipped_immed += 1
             result.append(inst + (reverse_map[line],))
             next = line
@@ -428,11 +428,13 @@ def stitch(insts, raw_code, jumps, gfxv):
     if len(result) != N:
         print('Warning - Stitching rate: '+str(len(result) * 100 / N)+'% matched')
         print('Leftovers:', [WaveInstCategory[insts[i+k][1]] for k in range(20) if i+k < len(insts)])
+        print('Sizes:', len(result), 'of', N)
         try:
             print(line, code[line])
         except:
             pass
     else:
+        print('Fully parsed', N, 'waves')
         while line < len(code):
             if 's_endpgm' in code[line]:
                 mem_unroll.append( [reverse_map[line], SMEM_INST+VLMEM_INST+VSMEM_INST+FLAT_INST] )

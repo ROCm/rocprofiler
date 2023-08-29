@@ -266,6 +266,9 @@ The user has two options for building:
         # Special attention to gfx1100.s==navi31 in the ISA file name. 
         # Use gfx1030 for navi21, gfx90a for MI200 and gfx940 for MI300
         hipcc -g --save-temps vectoradd_hip.cpp -o vectoradd_hip.exe
+        # for csv mode
+        rocprofv2 -i input.txt -o out.csv --plugin att vectoradd_hip-hip-amdgcn-amd-amdhsa-gfx1100.s --mode csv ./vectoradd_hip.exe
+        # for browser mode
         rocprofv2 -i input.txt --plugin att vectoradd_hip-hip-amdgcn-amd-amdhsa-gfx1100.s --mode network ./vectoradd_hip.exe
         # Then open the browser at http://localhost:8000
         # The ISA can also be obtained from llvm/roc objdump, however, annotations will be different
@@ -279,13 +282,15 @@ The user has two options for building:
         - --mpi [proc]: Parse with this many mpi processes, for greater analysis speed. Does not change results. Requires mpi4py.
         - --att_kernel "filename": Kernel filename to use (instead of ATT asking which one to use).
         - --trace_file "files": glob (wildcards allowed) of traces files to parse. Requires quotes for use with wildcards.
-        - --mode [network, file, off (default)]
+        - --mode [network, file, csv, off (default)]
           - ##### network
             Opens the server with the browser UI.
             att needs 2 ports available (e.g. 8000, 18000). There is an option (default: --ports "8000,18000") to change these.
             In case rocprofv2 is running on a different machine, use port forwarding "ssh -L 8000:localhost:8000 <user@IP>" so the browser can be used locally. For docker, use --network=host --ipc=host -p8000:8000 -p18000:18000
           - ##### file
             Dumps the analyzed json files to disk for vieweing at a later time. Run python3 httpserver.py from within the generated ui/ folder to view the trace, similarly to network mode. The folder can be copied to another machine, and will run without rocm.
+          - ##### csv
+            Generates CSV file (-o filename.csv) with the assembly and instruction latency tables.
           - ##### off
             Runs trace collection but not analysis, so it can be analyzed at a later time. Run rocprofv2 ATT [network, file] with the same parameters, removing the application binary, to analyze previously generated traces.
       - ##### input.txt 
