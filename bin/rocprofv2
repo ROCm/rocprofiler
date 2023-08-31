@@ -25,8 +25,8 @@ usage() {
     echo -e "--clean-install             For installing ROCProfilerV2 with new clean build in the default installation folder (review build.sh to know more about the default paths)"
   fi
   echo -e "--hip-api                   For Collecting HIP API Traces"
-  echo -e "--hip-activity              For Collecting HSA API Activities Traces"
-  echo -e "--hsa-api                   For Collecting HIP API Traces"
+  echo -e "--hip-activity              For Collecting HIP API Activities Traces"
+  echo -e "--hsa-api                   For Collecting HSA API Traces"
   echo -e "--hsa-activity              For Collecting HSA API Activities Traces"
   echo -e "--roctx-trace               For Collecting ROCTx Traces"
   echo -e "--kernel-trace              For Collecting Kernel dispatch Traces"

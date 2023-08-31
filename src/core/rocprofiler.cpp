@@ -39,6 +39,8 @@ THE SOFTWARE.
 #include "util/exception.h"
 #include "util/hsa_rsrc_factory.h"
 #include "util/logger.h"
+#include "src/core/hsa/hsa_support.h"
+#include "src/utils/helper.h"
 
 #define PUBLIC_API __attribute__((visibility("default")))
 #define CONSTRUCTOR_API __attribute__((constructor))
@@ -377,6 +379,9 @@ std::atomic<util::Logger*> util::Logger::instance_{};
 }  // namespace rocprofiler
 
 CONTEXT_INSTANTIATE();
+
+static bool started{false};
+// #include "src/core/hsa/hsa_support.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Public library methods
