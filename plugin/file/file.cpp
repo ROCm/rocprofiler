@@ -357,6 +357,8 @@ class file_plugin_t {
         *output_file << ',' << name_c;
       }
       *output_file << '\n';
+    }else{ //kernel trace condition
+      *output_file << '\n';
     } 
     *output_file << std::to_string(profiler_record->header.id.handle) << ","
                  << std::to_string(profiler_record->gpu_id.handle) << ","
