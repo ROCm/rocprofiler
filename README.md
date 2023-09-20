@@ -318,11 +318,7 @@ The user has two options for building:
         - att: TARGET_CU=1 //or some other CU [0,15] - WGP for Navi [0,8]
         - SE_MASK=0x1 // bitmask of shader engines. The fewer, the easier on the hardware. Default enables 1 out of 4 shader engines.
         - SIMD_MASK=0xF // GFX9: bitmask of SIMDs. Navi: SIMD Index [0-3].
-<<<<<<< HEAD   (bc7174 SWDEV-415057: Fixing warning messages for masked simds)
         - DISPATCH=ID,RN // collect trace only for the given dispatch_ID and MPI rank RN. RN ignored for single processes. Multiple lines with varying combinations of RN and ID can be added.
-=======
-        - DISPATCH=ID,RN // collect trace only for the given dispatch_ID (from --kernel-trace) and MPI rank RN. RN is optional and ignored for single processes. Multiple lines with varying combinations of RN and ID can be added.
->>>>>>> CHANGE (157eac DCGPUBU-44: Added arbitrary envvars to file/dir names. Squas)
         - KERNEL=kernname // Profile only kernels containing the string kernname (c++ mangled name). Multiple lines can be added.
         - PERFCOUNTERS_COL_PERIOD=0x3 // Multiplier period for counter collection [0~31]. 0=fastest (usually once every 16 cycles). GFX9 only. Counters will be shown in a graph over time in the browser UI.
         - PERFCOUNTER=counter_name // Add a SQ counter to be collected with ATT; period defined by PERFCOUNTERS_COL_PERIOD. GFX9 only.
@@ -472,3 +468,4 @@ Please report in the Github Issues
   echo profile_standard >> /sys/class/drm/card0/device/power_dpm_force_performance_level
   ```
   Recommended: "profile_standard" for counter collection and "auto" for all other profiling. Use rocm-smi to verify the current power state. For multiGPU systems (includes integrated graphics), replace "card0" by the desired card.
+- Timestamps may be incorrect with HIP_OPS when the system has been in sleep state.
