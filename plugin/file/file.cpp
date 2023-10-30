@@ -111,7 +111,7 @@ class file_plugin_t {
       const char* output_dir = getenv("OUTPUT_PATH");
       output_file_name = getenv("OUT_FILE_NAME") ? std::string(getenv("OUT_FILE_NAME")) : "";
 
-      if (output_dir == nullptr && getenv("OUT_FILE_NAME") == nullptr) {
+      if (output_dir == nullptr && output_file_name.size() == 0) {
         stream_.copyfmt(std::cout);
         stream_.clear(std::cout.rdstate());
         stream_.basic_ios<char>::rdbuf(std::cout.rdbuf());
@@ -127,8 +127,6 @@ class file_plugin_t {
         return;
       }
 
-      output_file_name = replace_MPI_macros(output_file_name);
-
       std::stringstream ss;
       ss << name_ << "_" << ((output_file_name.empty()) ? std::to_string(GetPid()) : "")
          << output_file_name << ".csv";
@@ -139,28 +137,6 @@ class file_plugin_t {
     bool is_open() const { return stream_.is_open(); }
     bool fail() const { return stream_.fail(); }
     bool isStdOut() const { return bPrintToStdout; }
-
-    // Returns a string with the MPI %macro replaced with the corresponding envvar
-    std::string replace_MPI_macros(std::string output_file_name) {
-      std::unordered_map<const char*, const char*> MPI_BUILTINS = {
-          {"MPI_RANK", "%rank"},
-          {"OMPI_COMM_WORLD_RANK", "%rank"},
-          {"MV2_COMM_WORLD_RANK", "%rank"}};
-
-      for (const auto& [envvar, key] : MPI_BUILTINS) {
-        size_t key_find = output_file_name.rfind(key);
-        if (key_find == std::string::npos) continue;  // Does not contain a %?rank var
-
-        const char* env_var_set = getenv(envvar);
-        if (env_var_set == nullptr) continue;  // MPI_COMM_WORLD_x var is does not exist
-
-        int rank = atoi(env_var_set);
-        output_file_name = output_file_name.substr(0, key_find) + std::to_string(rank) +
-            output_file_name.substr(key_find + std::string(key).size());
-      }
-
-      return output_file_name;
-    }
 
    private:
     const std::string name_;
@@ -257,12 +233,6 @@ class file_plugin_t {
               << "Dispatch_ID,GPU_ID,Queue_ID,Queue_Index,PID,TID,GRD,WGR,LDS,SCR,Arch_VGPR,"
                  "ACCUM_VGPR,SGPR,Wave_Size,SIG,OBJ,Kernel_Name,Start_Timestamp,End_Timestamp,"
                  "Correlation_ID";
-          if (counter_names_.size() > 0) {
-            for (uint32_t i = 0; i < counter_names_.size(); i++)
-              *output_file << "," << counter_names_[i];
-          }
-          *output_file << std::endl;
-          *output_file << std::endl;
           kernel_dispatches_header_written_.exchange(true, std::memory_order_release);
           return;
         } else if (type == output_type_t::PC_SAMPLING) {
@@ -367,6 +337,29 @@ class file_plugin_t {
       CHECK_ROCPROFILER(rocprofiler_query_kernel_info(ROCPROFILER_KERNEL_NAME,
                                                       profiler_record->kernel_id, &kernel_name_c));
     }
+    if (!counter_header_written_ && profiler_record->counters) {
+      counter_header_written_ = true;
+
+      for (uint64_t i = 0; i < profiler_record->counters_count.value; i++) {
+        auto counter_handler = profiler_record->counters[i].counter_handler;
+        if (!counter_handler.handle) continue;
+
+        size_t counter_name_length = 0;
+        const char* name_c = nullptr;
+
+        CHECK_ROCPROFILER(rocprofiler_query_counter_info_size(
+            session_id, ROCPROFILER_COUNTER_NAME, counter_handler, &counter_name_length));
+
+        if (counter_name_length == 0) continue;
+
+        CHECK_ROCPROFILER(rocprofiler_query_counter_info(session_id, ROCPROFILER_COUNTER_NAME,
+                                                         counter_handler, &name_c));
+        *output_file << ',' << name_c;
+      }
+      *output_file << '\n';
+    }else{ //kernel trace condition
+      *output_file << '\n';
+    } 
     *output_file << std::to_string(profiler_record->header.id.handle) << ","
                  << std::to_string(profiler_record->gpu_id.handle) << ","
                  << std::to_string(profiler_record->queue_id.handle) << ","
@@ -461,6 +454,7 @@ class file_plugin_t {
 
  private:
   bool valid_{false};
+  bool counter_header_written_ = false;
   std::vector<std::string> counter_names_;
 
   std::atomic<bool> roctx_header_written_{false}, hsa_api_header_written_{false},

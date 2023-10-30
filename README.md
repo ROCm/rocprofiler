@@ -243,6 +243,13 @@ The user has two options for building:
     ./rocprofv2 --plugin plugin_name -i samples/input.txt -d output_dir <app_relative_path> # -d is optional, but can be used to define the directory output for output results
     ```
 
+    Both the output directory and filenames allow for simple environment variable substitution via a special syntax %q{var} -> $var, e.g.:
+    ```bash
+    export var="FOO"
+    rocprofv2 --plugin perfetto -o file_%q{var}_name
+    # Generates file names: file_FOO_name[...].pftrace
+    ```
+
     - #### (ATT) Advanced Thread Trace
       Tool used to collect fine-grained hardware metrics. Provides ISA-level instruction hotspot analysis via hardware tracing.
 
@@ -461,3 +468,4 @@ Please report in the Github Issues
   echo profile_standard >> /sys/class/drm/card0/device/power_dpm_force_performance_level
   ```
   Recommended: "profile_standard" for counter collection and "auto" for all other profiling. Use rocm-smi to verify the current power state. For multiGPU systems (includes integrated graphics), replace "card0" by the desired card.
+- Timestamps may be incorrect with HIP_OPS when the system has been in sleep state.
