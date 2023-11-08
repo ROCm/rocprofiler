@@ -59,6 +59,14 @@
 
 #include "utils/helper.h"
 #include "trace_buffer.h"
+#include "core/session/att/att.h"
+
+
+struct PluginHeaderPacket
+{
+  std::string plugin_path;
+  void* userdata;
+};
 
 #define SLEEP_CYCLE_LENGTH 100l
 
@@ -97,10 +105,10 @@ void warning(const std::string& msg) { std::cerr << msg << std::endl; }
 
 class rocprofiler_plugin_t {
  public:
-  rocprofiler_plugin_t(const std::string& plugin_path) {
-    plugin_handle_ = dlopen(plugin_path.c_str(), RTLD_LAZY);
+  rocprofiler_plugin_t(const PluginHeaderPacket& data) {
+    plugin_handle_ = dlopen(data.plugin_path.c_str(), RTLD_LAZY);
     if (plugin_handle_ == nullptr) {
-      warning(std::string("Warning: dlopen for ") + plugin_path + " failed: " + dlerror());
+      warning(std::string("Warning: dlopen for ") + data.plugin_path + " failed: " + dlerror());
       return;
     }
 
@@ -117,8 +125,7 @@ class rocprofiler_plugin_t {
     if (auto* initialize = reinterpret_cast<decltype(rocprofiler_plugin_initialize)*>(
             dlsym(plugin_handle_, "rocprofiler_plugin_initialize"));
         initialize != nullptr)
-      valid_ =
-          initialize(ROCPROFILER_VERSION_MAJOR, ROCPROFILER_VERSION_MINOR, &counter_names) == 0;
+      valid_ = initialize(ROCPROFILER_VERSION_MAJOR, ROCPROFILER_VERSION_MINOR, data.userdata) == 0;
   }
 
   ~rocprofiler_plugin_t() {
@@ -190,18 +197,25 @@ struct hip_api_trace_entry_t {
   }
 };
 
+size_t GetBufferSize() {
+  auto bufSize = getenv("ROCPROFILER_BUFFER_SIZE");
+  // Default size if not set
+  if (!bufSize) return 0x200000;
+  return std::stoll({bufSize});
+}
+
 rocprofiler::TraceBuffer<hip_api_trace_entry_t> hip_api_buffer(
-    "HIP API", 0x200000, [](hip_api_trace_entry_t* entry) {
+    "HIP API", GetBufferSize(), [](hip_api_trace_entry_t* entry) {
       assert(plugin && "plugin is not initialized");
       plugin->write_callback_record(entry->record);
     });
 rocprofiler::TraceBuffer<hsa_api_trace_entry_t> hsa_api_buffer(
-    "HSA API", 0x200000, [](hsa_api_trace_entry_t* entry) {
+    "HSA API", GetBufferSize(), [](hsa_api_trace_entry_t* entry) {
       assert(plugin && "plugin is not initialized");
       plugin->write_callback_record(entry->record);
     });
 rocprofiler::TraceBuffer<roctx_trace_entry_t> roctx_trace_buffer(
-    "rocTX API", 0x200000, [](roctx_trace_entry_t* entry) {
+    "rocTX API", GetBufferSize(), [](roctx_trace_entry_t* entry) {
       assert(plugin && "plugin is not initialized");
       plugin->write_callback_record(entry->record);
     });
@@ -253,7 +267,7 @@ std::vector<std::string> GetCounterNames() {
 }
 
 typedef std::tuple<std::vector<std::pair<rocprofiler_att_parameter_name_t, uint32_t>>,
-                   std::vector<std::string>, std::vector<std::string>, std::vector<uint64_t>>
+        std::vector<std::string>, std::vector<std::string>, std::vector<uint64_t>, uint64_t>
     att_parsed_input_t;
 
 static int GetMpRank() {
@@ -269,7 +283,7 @@ att_parsed_input_t GetATTParams() {
   std::vector<std::string> counters_names;
   std::vector<uint64_t> dispatch_ids;
   const char* path = getenv("COUNTERS_PATH");
-  if (!path) return {{}, {}, {}, {}};
+  if (!path) return {{}, {}, {}, {}, 0};
 
   // List of parameters the user can set. Maxvalue is unused.
   std::unordered_map<std::string, rocprofiler_att_parameter_name_t> ATT_PARAM_NAMES{};
@@ -295,18 +309,20 @@ att_parsed_input_t GetATTParams() {
 
   // Default values used for token generation.
   std::unordered_map<std::string, uint32_t> default_params = {
-    {"SE_MASK", 0x111111}, // One every 4 SEs, by default
-    {"SIMD_SELECT", 0x3}, // 0x3 works for both gfx9 and Navi
-    {"BUFFER_SIZE", 0x40000000}, // 2^30 == 1GB
-    {"ISA_CAPTURE_MODE", static_cast<uint32_t>(ROCPROFILER_CAPTURE_SYMBOLS_ONLY)}
-  };
+      {"SE_MASK", 0x111111},        // One every 4 SEs, by default
+      {"SIMD_SELECT", 0x3},         // 0x3 works for both gfx9 and Navi
+      {"BUFFER_SIZE", 0x40000000},  // 2^30 == 1GB
+      {"ISA_CAPTURE_MODE", static_cast<uint32_t>(ROCPROFILER_CAPTURE_SYMBOLS_ONLY)}};
 
   std::ifstream trace_file(path);
   if (!trace_file.is_open()) {
     std::cout << "Unable to open att trace file." << std::endl;
-    return {{}, {}, {}, {}};
+    return {{}, {}, {}, {}, 0};
   }
 
+  rocprofiler::att_header_packet_t header{.raw = 0};
+  header.enable = 1;
+  header.DSIMDM = default_params["SIMD_SELECT"];
   int MPI_RANK = GetMpRank();
 
   bool started_att_counters = false;
@@ -321,18 +337,22 @@ att_parsed_input_t GetATTParams() {
       if (pos == std::string::npos) continue;
 
       param_name = line.substr(0, pos);
-      for (auto& c : param_name) c = (char)toupper(c); // So we don't have to worry about lowercase inputs
-      line = line.substr(pos+1);
+      for (auto& c : param_name)
+        c = (char)toupper(c);  // So we don't have to worry about lowercase inputs
+      line = line.substr(pos + 1);
     }
 
     if (param_name.find("ATT") != std::string::npos &&
         param_name.find("TARGET_CU") != std::string::npos) {
-      started_att_counters = true; // Means we'll do ATT
-      param_name = "TARGET_CU"; // To cover different variations
+      started_att_counters = true;  // Means we'll do ATT
+      param_name = "TARGET_CU";     // To cover different variations
     }
     if (!started_att_counters) continue;
 
-    if (param_name == "KERNEL") {
+    if (param_name == "REMOVE_HEADER_PACKET") {
+      header.enable = 0;
+      continue;
+    } else if (param_name == "KERNEL") {
       kernel_names.push_back(line);
       continue;
     } else if (param_name == "PERFCOUNTER") {
@@ -344,7 +364,7 @@ att_parsed_input_t GetATTParams() {
       int rank = (comma < line.size() - 1) ? stoi(line.substr(comma + 1)) : 0;
 
       if (MPI_RANK < 0 || rank == MPI_RANK)  // Only add ID if rank matches the one in input.txt
-        dispatch_ids.push_back(std::max(id-1,0)); // off by 1 in relation to kernel-trace
+        dispatch_ids.push_back(std::max(id - 1, 0));  // off by 1 in relation to kernel-trace
       continue;
     }
     // param_value is a number
@@ -371,14 +391,19 @@ att_parsed_input_t GetATTParams() {
              param_name.c_str(), line.c_str());
       for (auto& name : ATT_PARAM_NAMES) printf("%s\n", name.first.c_str());
     }
+
+    if (param_name.find("TARGET_CU") != std::string::npos)
+      header.DCU = param_value;
+    else if (param_name.find("SIMD_SELECT") != std::string::npos)
+      header.DSIMDM = param_value;
   }
 
-  if (!started_att_counters) return {{}, {}, {}, {}};
+  if (!started_att_counters) return {{}, {}, {}, {}, 0};
 
   for (auto& param : default_params)
     parameters.push_back(std::make_pair(ATT_PARAM_NAMES[param.first], param.second));
 
-  return {parameters, kernel_names, counters_names, dispatch_ids};
+  return {parameters, kernel_names, counters_names, dispatch_ids, header.raw};
 }
 
 void finish() {
@@ -403,14 +428,18 @@ void finish() {
     rocprofiler::TraceBufferBase::FlushAll();
     CHECK_ROCPROFILER(rocprofiler_terminate_session(session_id));
   }
-  if (session_id.handle > 0) {
-    CHECK_ROCPROFILER(rocprofiler_destroy_session(session_id));
-  }
+  // If hsa_shut_down() is not called from the application then we may still have async calls back
+  // to the rocprofiler to use session parameters, thats why we need to leak the session up till
+  // this is fixed in the ROCR-Runtime
+
+  // if (session_id.handle > 0) {
+  //   CHECK_ROCPROFILER(rocprofiler_destroy_session(session_id));
+  // }
 }
 
 static bool env_var_search(std::string& s) {
   std::smatch m;
-  std::regex e ("(.*)\\%\\q\\{([^}]+)\\}(.*)");
+  std::regex e("(.*)\\%\\q\\{([^}]+)\\}(.*)");
   std::regex_match(s, m, e);
 
   if (m.size() != 4) return false;
@@ -418,7 +447,7 @@ static bool env_var_search(std::string& s) {
   while (m.size() == 4) {
     const char* envvar = getenv(m[2].str().c_str());
     if (!envvar) envvar = "";
-    s = m[1].str()+envvar+m[3].str();
+    s = m[1].str() + envvar + m[3].str();
     std::regex_match(s, m, e);
   };
 
@@ -435,7 +464,7 @@ static void env_var_replace(const char* env_name) {
 }
 
 // load plugins
-void plugins_load() {
+void plugins_load(void* userdata) {
   // Load output plugin
   if (Dl_info dl_info; dladdr((void*)plugins_load, &dl_info) != 0) {
     const char* plugin_name = getenv("ROCPROFILER_PLUGIN_LIB");
@@ -453,15 +482,20 @@ void plugins_load() {
     if (out_path.size()) {
       try {
         std::experimental::filesystem::create_directories(out_path);
-      } catch (...) {}
+      } catch (...) {
+      }
       out_path = out_path + '/';
     }
     if (out_path.size() && getenv("ROCPROFILER_COUNTERS")) {
-      std::ofstream(out_path+"pmc.txt", std::ios::app)
-        << std::string(getenv("ROCPROFILER_COUNTERS")) << '\n';
+      std::ofstream(out_path + "pmc.txt", std::ios::app)
+          << std::string(getenv("ROCPROFILER_COUNTERS")) << '\n';
     }
 
-    if (!plugin.emplace(fs::path(dl_info.dli_fname).replace_filename(plugin_name)).is_valid()) {
+    PluginHeaderPacket header{
+      .plugin_path = fs::path(dl_info.dli_fname).replace_filename(plugin_name),
+      .userdata = userdata
+    };
+    if (!plugin.emplace(header).is_valid()) {
       plugin.reset();
     }
   }
@@ -683,10 +717,6 @@ ROCPROFILER_EXPORT bool OnLoad(void* table, uint64_t runtime_version, uint64_t f
     }
   }
 
-  // load the plugins
-  plugins_load();
-
-
   std::vector<rocprofiler_tracer_activity_domain_t> apis_requested;
 
   if (getenv("ROCPROFILER_HIP_API_TRACE")) apis_requested.emplace_back(ACTIVITY_DOMAIN_HIP_API);
@@ -703,7 +733,11 @@ ROCPROFILER_EXPORT bool OnLoad(void* table, uint64_t runtime_version, uint64_t f
   std::vector<std::string> kernel_names;
   std::vector<std::string> att_counters_names;
   std::vector<uint64_t> dispatch_ids;
-  std::tie(params, kernel_names, att_counters_names, dispatch_ids) = GetATTParams();
+  uint64_t attheader;
+  std::tie(params, kernel_names, att_counters_names, dispatch_ids, attheader) = GetATTParams();
+
+  // load the plugins
+  plugins_load(params.size() ? (void*)attheader : (void*)&counter_names);
 
   for (auto& kv_pair : params)
     parameters.emplace_back(rocprofiler_att_parameter_t{kv_pair.first, kv_pair.second});

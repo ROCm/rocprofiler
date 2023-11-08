@@ -73,6 +73,7 @@ void __attribute__((constructor)) globalsetting() {
   gfx_path << app_path << metrics_path;
   setenv("ROCPROFILER_METRICS_PATH", gfx_path.str().c_str(), true);
   setenv("ROCPROFILER_MAX_ATT_PROFILES", "2", 1);
+  setenv("ROCPROFILER_TRUNCATE_KERNEL_PATH", "1", true);
 }
 
 /**
@@ -280,7 +281,7 @@ TEST_F(HelloWorldTest, WhenRunningProfilerWithAppThenEndTimeIsGreaterThenStartTi
 
   for (auto& itr : current_kernel_info) {
     if (!(itr.begin_time).empty() && !(itr.end_time).empty()) {
-      EXPECT_GT(itr.end_time, itr.begin_time);
+      EXPECT_GT(get_timestamp_value(itr.end_time), get_timestamp_value(itr.begin_time));
     }
   }
 }
@@ -346,7 +347,7 @@ TEST_F(VectorAddTest, WhenRunningProfilerWithAppThenEndTimeIsGreaterThenStartTim
 
   for (auto& itr : current_kernel_info) {
     if (!(itr.begin_time).empty() && !(itr.end_time).empty()) {
-      EXPECT_GT(itr.end_time, itr.begin_time);
+      EXPECT_GT(get_timestamp_value(itr.end_time), get_timestamp_value(itr.begin_time));
     }
   }
 }

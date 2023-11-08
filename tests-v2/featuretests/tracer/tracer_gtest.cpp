@@ -246,6 +246,16 @@ TEST_F(HelloWorldTest, WhenRunningTracerWithAppThenFunctionNamesMatchWithGoldenO
 
   ASSERT_TRUE(current_kernel_info.size());
 
+  int version_position = current_kernel_info[0].function.find('R');
+  if(version_position != std::string::npos) {
+    current_kernel_info[0].function = current_kernel_info[0].function.substr(0, version_position) + ')';
+  }
+
+  version_position = current_kernel_info[1].function.find('R');
+  if(version_position != std::string::npos) {
+    current_kernel_info[1].function = current_kernel_info[1].function.substr(0, version_position) + ')';
+  }
+
   EXPECT_EQ(golden_kernel_info[0].function, current_kernel_info[0].function);
   EXPECT_EQ(golden_kernel_info[1].function, current_kernel_info[1].function);
 }
@@ -260,6 +270,22 @@ TEST_F(HelloWorldTest, WhenRunningTracerWithAppThenKernelDurationShouldBePositiv
   ASSERT_TRUE(current_kernel_info.size());
 
   EXPECT_GT(current_kernel_info.size(), 0);
+}
+
+// Test:4 Compares end-time is greater than start-time in current
+// tracer output
+TEST_F(HelloWorldTest, WhenRunningTracerWithAppThenEndTimeIsGreaterThenStartTime) {
+  // kernel info in current profiler run
+  std::vector<tracer_kernel_info_t> current_kernel_info;
+
+  GetKernelInfoForRunningApplication(&current_kernel_info);
+  ASSERT_TRUE(current_kernel_info.size());
+
+  for (auto& itr : current_kernel_info) {
+    if (!(itr.begin_time).empty() && !(itr.end_time).empty()) {
+      EXPECT_GT(get_timestamp_value(itr.end_time), get_timestamp_value(itr.begin_time));
+    }
+  }
 }
 
 

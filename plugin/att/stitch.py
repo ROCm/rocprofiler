@@ -56,7 +56,7 @@ WaveInstCategory = {
 class RegisterWatchList:
     def __init__(self, labels):
         self.registers = {"v" + str(k): [[] for m in range(64)] for k in range(64)}
-        for k in range(64):
+        for k in range(128):
             self.registers["s" + str(k)] = []
         self.labels = labels
 
@@ -83,9 +83,23 @@ class RegisterWatchList:
         # print('Get pc:', line)
         try:
             dst = line.split(" ")[1].strip()
-            label_dest = next_line.split(", ")[-1].split("@")[0]
-            for reg in self.range(dst):
-                self.registers[reg].append(deepcopy(self.labels[label_dest]))
+            label_dests = []
+            try:
+                label_dests = next_line.split(", ")
+            except:
+                pass
+            try:
+                label_dests.append(next_line.split(", ")[-1].split("@")[0])
+            except:
+                pass
+
+            for label_dst in label_dests:
+                try:
+                    cur_label = self.labels[label_dst]
+                    for reg in self.range(dst):
+                        self.registers[reg].append(deepcopy(cur_label))
+                except:
+                    pass
         except:
             pass
 
@@ -169,17 +183,17 @@ class PCTranslator:
         pass
     def swappc(self, line, line_num, inst_index):
         try:
-            loc = self.addrmap[self.insts[inst_index+1][2]]
+            loc = self.addrmap[self.insts[inst_index+1].cycles]
             return loc
         except:
-            print('SWAPPC: Could not find addr', self.insts[inst_index+1][2], 'for', line)
+            print('SWAPPC: Could not find addr', self.insts[inst_index+1].cycles, 'for', line)
             return -1
     def setpc(self, line, inst_index):
         try:
-            loc = self.addrmap[self.insts[inst_index+1][2]]
+            loc = self.addrmap[self.insts[inst_index+1].cycles]
             return loc
         except:
-            print('SETPC: Could not find addr', self.insts[inst_index+1][2], 'for', line)
+            print('SETPC: Could not find addr', self.insts[inst_index+1].cycles, 'for', line)
             return -1
     def scratch(self, line):
         pass
@@ -190,7 +204,7 @@ class PCTranslator:
 
 # Matches tokens in reverse order
 def try_match_swapped(insts, code, i, line):
-    return insts[i + 1][1] == code[line][1] and insts[i][1] == code[line + 1][1]
+    return insts[i + 1].type == code[line][1] and insts[i].type == code[line + 1][1]
 
 
 def stitch(insts, raw_code, jumps, gfxv, bIsAuto):
@@ -219,17 +233,16 @@ def stitch(insts, raw_code, jumps, gfxv, bIsAuto):
     for c in raw_code[1:]:
         c = list(c)
         c[0] = c[0].split(";")[0].split("//")[0].strip()
+        jump_map.append(len(code))
 
         if c[1] != 100:
             code.append(c)
         elif ":" in c[0]:
             labels[c[0].split(":")[0]] = len(code)
-        jump_map.append(len(code) - 1)
 
-    reverse_map = []
+    reverse_map = {}
     for k, v in enumerate(jump_map):
-        if v >= len(reverse_map):
-            reverse_map.append(k)
+        reverse_map[v] = k
 
     jumps = {jump_map[j] + 1: j for j in jumps}
 
@@ -242,25 +255,25 @@ def stitch(insts, raw_code, jumps, gfxv, bIsAuto):
     loops = 0
     maxline = 0
 
-    if bIsAuto and len(insts) and insts[0][1] == PCINFO:
+    if bIsAuto and len(insts) and insts[0].type == PCINFO:
         try:
             watchlist = PCTranslator(code, insts)
-            line = watchlist.addrmap[insts[0][2]]
+            line = watchlist.addrmap[insts[0].cycles]
         except:
             return None
+        insts = insts[1:]
     else:
         watchlist = RegisterWatchList(labels=labels)
 
-    if len(insts) and insts[0][1] == PCINFO:
-        insts = insts[1:]
     N = len(insts)
 
-    pcsequence = []
+    pcskip = []
     while i < N:
-        if insts[i][1] == PCINFO:
+        if insts[i].type == PCINFO:
             i += 1
-            N -= 1
             continue
+
+        #print(line, i, WaveInstCategory[insts[i].type], insts[i].num_waves, insts[i].cycles, code[line])
 
         loops += 1
         if line >= len(code) or loops > MAX_STITCHED_TOKENS \
@@ -283,38 +296,36 @@ def stitch(insts, raw_code, jumps, gfxv, bIsAuto):
         if as_line[1] == GETPC:
             try:
                 watchlist.getpc(as_line[0], code[line+1][0])
-                matched = inst[1] in [SALU, JUMP]
+                matched = inst.type in [SALU, JUMP]
             except:
                 matched = False
         elif as_line[1] == LANEIO:
             watchlist.updatelane(as_line[0])
-            matched = inst[1] == VALU
+            matched = inst.type == VALU
         elif as_line[1] == SETPC:
             next = watchlist.setpc(as_line[0], i)
-            matched = inst[1] in [SALU, JUMP]
+            matched = inst.type in [SALU, JUMP]
             if bIsAuto:
+                pcskip.append(i)
                 matched = next >= 0
                 i += 1
-                N -= 1
-                pcsequence.append(insts[i][2])
         elif as_line[1] == SWAPPC:
             next = watchlist.swappc(as_line[0], line, i)
-            matched = inst[1] in [SALU, JUMP]
+            matched = inst.type in [SALU, JUMP]
             if bIsAuto:
+                pcskip.append(i)
                 matched = next >= 0
                 i += 1
-                N -= 1
-                pcsequence.append(insts[i][2])
-        elif inst[1] == as_line[1]:
+        elif inst.type == as_line[1]:
             if line in jumps:
                 loopCount[jumps[line] - 1] += 1
             num_inflight = NUM_FLAT + NUM_SMEM + NUM_VLMEM + NUM_VSMEM
 
-            if inst[1] == SMEM or inst[1] == LDS:
-                smem_ordering = 1 if inst[1] == SMEM else smem_ordering
+            if inst.type == SMEM or inst.type == LDS:
+                smem_ordering = 1 if inst.type == SMEM else smem_ordering
                 SMEM_INST.append([reverse_map[line], num_inflight])
                 NUM_SMEM += 1
-            elif inst[1] == VMEM or (inst[1] == FLAT and "global_" in as_line[0]):
+            elif inst.type == VMEM or (inst.type == FLAT and "global_" in as_line[0]):
                 inc_ordering = False
                 if "flat_" in as_line[0]:
                     inc_ordering = True
@@ -329,13 +340,13 @@ def stitch(insts, raw_code, jumps, gfxv, bIsAuto):
                     NUM_VLMEM += 1
                     if inc_ordering:
                         vlmem_ordering = 1
-            elif inst[1] == FLAT:
+            elif inst.type == FLAT:
                 smem_ordering = 1
                 vlmem_ordering = 1
                 vsmem_ordering = 1
                 FLAT_INST.append([reverse_map[line], num_inflight])
                 NUM_FLAT += 1
-            elif inst[1] == IMMED and "s_waitcnt" in as_line[0]:
+            elif inst.type == IMMED and "s_waitcnt" in as_line[0]:
                 if "lgkmcnt" in as_line[0]:
                     wait_N = int(as_line[0].split("lgkmcnt(")[1].split(")")[0])
                     flight_count.append([as_line[5], num_inflight, wait_N])
@@ -399,12 +410,12 @@ def stitch(insts, raw_code, jumps, gfxv, bIsAuto):
                         NUM_FLAT = min(max(wait_N - NUM_VSMEM, 0), NUM_FLAT)
                     num_inflight = NUM_FLAT + NUM_SMEM + NUM_VLMEM + NUM_VSMEM
 
-        elif inst[1] == JUMP and as_line[1] == BRANCH:
+        elif inst.type == JUMP and as_line[1] == BRANCH:
             next = jump_map[as_line[2]]
             if next is None or next == 0:
                 print("Jump to unknown location!", as_line)
                 break
-        elif inst[1] == NEXT and as_line[1] == BRANCH:
+        elif inst.type == NEXT and as_line[1] == BRANCH:
             next = line + 1
         else:
             matched = False
@@ -424,12 +435,14 @@ def stitch(insts, raw_code, jumps, gfxv, bIsAuto):
                         break
 
         if matched:
-            result.append(inst + (reverse_map[line],))
+            inst.asmline = reverse_map[line]
+            result.append(inst)
             i += 1
             num_failed_stitches = 0
-        elif not bGFX9 and inst[1] == IMMED and line != next:
+        elif not bGFX9 and inst.type == IMMED and line != next:
             skipped_immed += 1
-            result.append(inst + (reverse_map[line],))
+            inst.asmline = reverse_map[line]
+            result.append(inst)
             next = line
             i += 1
         else:
@@ -439,7 +452,7 @@ def stitch(insts, raw_code, jumps, gfxv, bIsAuto):
     N = max(N, 1)
     if i != N:
         print('Warning - Stitching rate: '+str(i * 100 / N)+'% matched')
-        print('Leftovers:', [WaveInstCategory[insts[i+k][1]] for k in range(20) if i+k < len(insts)])
+        print('Leftovers:', [WaveInstCategory[insts[i+k].type] for k in range(20) if i+k < len(insts)])
         try:
             print(line, code[line])
         except:
@@ -453,4 +466,4 @@ def stitch(insts, raw_code, jumps, gfxv, bIsAuto):
                 break
             line += 1
 
-    return result, loopCount, mem_unroll, flight_count, maxline, len(result)
+    return result, loopCount, mem_unroll, flight_count, maxline, len(result), pcskip

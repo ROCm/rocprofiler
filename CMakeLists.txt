@@ -133,15 +133,6 @@ find_package(
 find_library(NUMA NAME numa REQUIRED)
 link_libraries(${NUMA})
 
-find_program(
-    ROCMINFO_EXEC
-    NAMES "rocminfo"
-    PATHS ${ROCM_PATH} ${CMAKE_INSTALL_PREFIX} "/usr/local" "/usr"
-    PATH_SUFFIXES bin)
-set(ORIGINAL_SCRIPT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin/tblextr.py)
-set(OUTPUT_SCRIPT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin/tblextr.py)
-configure_file(${ORIGINAL_SCRIPT_PATH} ${OUTPUT_SCRIPT_PATH} @ONLY)
-
 get_property(
     HSA_RUNTIME_INCLUDE_DIRECTORIES
     TARGET hsa-runtime64::hsa-runtime64
@@ -227,6 +218,11 @@ if(DEFINED CPACK_PACKAGING_INSTALL_PREFIX)
 else()
     set(CPACK_PACKAGING_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
 endif()
+
+set(ORIGINAL_SCRIPT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin/tblextr.py)
+set(OUTPUT_SCRIPT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin/tblextr.py)
+configure_file(${ORIGINAL_SCRIPT_PATH} ${OUTPUT_SCRIPT_PATH} @ONLY)
+
 message("CMake-install-prefix: ${CMAKE_INSTALL_PREFIX}")
 message("CPack-install-prefix: ${CPACK_PACKAGING_INSTALL_PREFIX}")
 message("-----------Dest-name: ${DEST_NAME}")
@@ -271,12 +267,10 @@ install(
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/${ROCPROFILER_NAME}
     COMPONENT runtime)
 
-# File reorg backward compatibility for non ASAN packaging
-if(NOT ENABLE_ASAN_PACKAGING)
-    # File reorg Backward compatibility
-    option(FILE_REORG_BACKWARD_COMPATIBILITY
-           "Enable File Reorg with backward compatibility" ON)
-endif()
+
+# File reorg Backward compatibility
+option(FILE_REORG_BACKWARD_COMPATIBILITY
+        "Enable File Reorg with backward compatibility" OFF)
 
 if(FILE_REORG_BACKWARD_COMPATIBILITY)
     # To enabe/disable #error in wrapper header files
@@ -350,7 +344,7 @@ if(${LIBRARY_TYPE} STREQUAL SHARED)
     set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
     set(CPACK_DEBIAN_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
     set(CPACK_DEBIAN_RUNTIME_PACKAGE_DEPENDS
-        "hsa-rocr-dev, rocm-core, libsystemd-dev, libelf-dev, libnuma-dev, libpciaccess-dev, libxml2-dev"
+        "rocminfo, hsa-rocr-dev, rocm-core, libsystemd-dev, libelf-dev, libnuma-dev, libpciaccess-dev, libxml2-dev"
         )
     set(CPACK_DEBIAN_DEV_PACKAGE_NAME "${PROJECT_NAME}-dev")
     set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "${PROJECT_NAME}, hsa-rocr-dev, rocm-core")
@@ -393,7 +387,7 @@ if(${LIBRARY_TYPE} STREQUAL SHARED)
     set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
     set(CPACK_RPM_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
     set(CPACK_RPM_RUNTIME_PACKAGE_REQUIRES
-        "hsa-rocr-dev, rocm-core, systemd-devel, libpciaccess-devel, libxml2-devel")
+        "rocminfo, hsa-rocr-dev, rocm-core, systemd-devel, libpciaccess-devel, libxml2-devel")
     set(CPACK_RPM_DEV_PACKAGE_NAME "${PROJECT_NAME}-devel")
     set(CPACK_RPM_DEV_PACKAGE_REQUIRES "${PROJECT_NAME}, hsa-rocr-dev, rocm-core")
     set(CPACK_RPM_DEV_PACKAGE_PROVIDES "${PROJECT_NAME}-dev")

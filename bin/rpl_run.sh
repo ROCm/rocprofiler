@@ -22,6 +22,7 @@
 # THE SOFTWARE.
 ################################################################################
 
+ROCPROF_ARGS="$*"
 time_stamp=`date +%y%m%d_%H%M%S`
 BIN_DIR=$(dirname $(realpath ${BASH_SOURCE[0]}))
 ROOT_DIR=$(dirname $BIN_DIR)
@@ -34,6 +35,11 @@ TLIB_PATH=$RPL_PATH/rocprofiler
 TTLIB_PATH=$ROOT_DIR/lib/roctracer
 ROCM_LIB_PATH=$ROOT_DIR/lib
 PROF_BIN_DIR=$ROOT_DIR/libexec/rocprofiler
+
+# check if rocprof is supportd on this gpu arch
+V1_SUPPORTED_GPU_ARCHS=("gfx80x","gfx90x","gfx10xx")
+CURRENT_AGENTS_LIST=$($BIN_DIR/rocm_agent_enumerator)
+IS_SUPPORTED="false"
 
 if [ -z "$ROCP_PYTHON_VERSION" ] ; then
   ROCP_PYTHON_VERSION=python3
@@ -50,32 +56,6 @@ GEN_STATS=0
 
 # Quoting profiled cmd line
 CMD_QTS=1
-
-export PATH=.:$PATH
-
-# enable error logging
-export HSA_TOOLS_REPORT_LOAD_FAILURE=1
-export HSA_VEN_AMD_AQLPROFILE_LOG=1
-export ROCPROFILER_LOG=1
-unset ROCPROFILER_SESS
-
-# Profiler environment
-# Loading of profiler library by HSA runtime
-MY_HSA_TOOLS_LIB="$RPL_PATH/librocprofiler64.so.1"
-# Loading of the test tool by ROC Profiler
-export ROCP_TOOL_LIB=$TLIB_PATH/librocprof-tool.so
-# Enabling HSA dispatches intercepting by ROC PRofiler
-export ROCP_HSA_INTERCEPT=1
-# Disabling internal ROC Profiler proxy queue (simple version supported for testing purposes)
-unset ROCP_PROXY_QUEUE
-# ROC Profiler metrics definition
-export ROCP_METRICS=$TLIB_PATH/metrics.xml
-# Disable AQL-profile read API
-export AQLPROFILE_READ_API=0
-# ROC Profiler package path
-export ROCP_PACKAGE_DIR=$ROOT_DIR
-# enabled SPM KFD mode
-export ROCP_SPM_KFD_MODE=1
 
 # error handling
 fatal() {
@@ -110,6 +90,9 @@ usage() {
   echo ""
   echo "Options:"
   echo "  -h - this help"
+  echo "  --tool-version <1|2> - to use specific version of rocprof tool, by default v1 is used"
+  echo "            1 - rocprofiler tool v1"
+  echo "            2 - rocprofiler tool v2"
   echo "  --verbose - verbose mode, dumping all base counters used in the input metrics"
   echo "  --list-basic - to print the list of basic HW counters"
   echo "  --list-derived - to print the list of derived metrics with formulas"
@@ -200,6 +183,10 @@ usage() {
   echo "      obj-tracking=off"
   echo "    ></defaults>"
   echo ""
+  echo "  --merge-traces - Script for aggregating results from multiple rocprofiler out directries."
+  echo "                   Usage: if running with rocprof"
+  echo "                   rocprof --merge-traces -o <outputdir> [<inputdir>...]"
+  echo ""
   exit 1
 }
 
@@ -228,6 +215,25 @@ run() {
      echo " Fatal could not find ROCm lib directory "
      fatal
   fi
+
+  # split the CURRENT_AGENTS_LIST array into individual elements.
+  current_gpus=(${CURRENT_AGENTS_LIST[@]})
+
+  for gpu in "${current_gpus[@]}"; do
+
+    # Check first 5 characters of gpu strings.
+    if [[ "${V1_SUPPORTED_GPU_ARCHS[@]:0:5}" =~ "${gpu:0:5}" ]]; then
+      IS_SUPPORTED="true"
+    fi
+
+  done
+
+  if [[ $IS_SUPPORTED == "false" ]]; then
+    echo "rocprof(v1) is not supported on this device."
+    echo "Please refer project's README for a list of supported architecures or use rocprofv2"
+    exit 1
+  fi
+
   export ROCP_INPUT="$1"
   OUTPUT_DIR="$2"
   shift
@@ -367,7 +373,26 @@ ARG_IN=""
 while [ 1 ] ; do
   ARG_IN=$1
   ARG_VAL=1
-  if [ "$1" = "-h" ] ; then
+  if [ "$1" = "--tool-version" ] ; then
+    if [ $2 = 1 ] ; then
+      :
+    elif [ $2 = 2 ] ; then
+      eval $BIN_DIR/rocprofv2 $ROCPROF_ARGS
+      exit 0
+    else
+      echo "Wrong option '$1 $2'"
+      usage
+    fi
+  elif [ "$1" = "--version" ]; then
+    if [ -f "$BIN_DIR/../libexec/rocprofiler/rocprofiler-version" ]; then
+      ROCPROFILER_LIBRARY_VERSION=1 $BIN_DIR/../libexec/rocprofiler/rocprofiler-version
+    else
+      ROCM_VERSION=$(cat $BIN_DIR/../.info/version)
+      echo -e "ROCm version: $ROCM_VERSION"
+      echo -e "ROCProfiler version: 2.0"
+    fi
+    exit 0
+  elif [ "$1" = "-h" ] ; then
     usage
   elif [ "$1" = "-i" ] ; then
     INPUT_FILE="$2"
@@ -483,12 +508,44 @@ while [ 1 ] ; do
     if [ "$2" = "off" ] ; then
       CMD_QTS=0
     fi
+  elif [ "$1" = "--merge-traces" ] ; then
+    shift
+    echo "merging traces with $PROF_BIN_DIR/merge_traces.sh"
+    $PROF_BIN_DIR/merge_traces.sh $@
+    exit 0
   else
     break
   fi
   shift
   if [ "$ARG_VAL" = 1 ] ; then shift; fi
 done
+
+export PATH=.:$PATH
+
+# enable error logging
+export HSA_TOOLS_REPORT_LOAD_FAILURE=1
+export HSA_VEN_AMD_AQLPROFILE_LOG=1
+export ROCPROFILER_LOG=1
+unset ROCPROFILER_SESS
+
+# Profiler environment
+# Loading of profiler library by HSA runtime
+MY_HSA_TOOLS_LIB="$RPL_PATH/librocprofiler64.so.1"
+# Loading of the test tool by ROC Profiler
+export ROCP_TOOL_LIB=$TLIB_PATH/librocprof-tool.so
+# Enabling HSA dispatches intercepting by ROC PRofiler
+export ROCP_HSA_INTERCEPT=1
+# Disabling internal ROC Profiler proxy queue (simple version supported for testing purposes)
+unset ROCP_PROXY_QUEUE
+# ROC Profiler metrics definition
+export ROCP_METRICS=$TLIB_PATH/metrics.xml
+# Disable AQL-profile read API
+export AQLPROFILE_READ_API=0
+# ROC Profiler package path
+export ROCP_PACKAGE_DIR=$ROOT_DIR
+# enabled SPM KFD mode
+export ROCP_SPM_KFD_MODE=1
+
 
 ARG_CK=`echo $ARG_IN | sed "s/^-.*$/-/"`
 if [ "$ARG_CK" = "-" ] ; then

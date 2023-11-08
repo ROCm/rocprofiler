@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 #include "test_utils.h"
+#include <regex>
 
 namespace rocprofiler {
 namespace tests {
@@ -90,8 +91,6 @@ void tokenize_profiler_output(std::string line, profiler_kernel_info_t& kinfo) {
   std::getline(tokenStream, token, ',');
   kinfo.queue_id = token;
   std::getline(tokenStream, token, ',');
-  kinfo.queue_index = token;
-  std::getline(tokenStream, token, ',');
   kinfo.process_id = token;
   std::getline(tokenStream, token, ',');
   kinfo.thread_id = token;
@@ -100,9 +99,9 @@ void tokenize_profiler_output(std::string line, profiler_kernel_info_t& kinfo) {
   std::getline(tokenStream, token, ',');
   kinfo.workgroup_size = token;
   std::getline(tokenStream, token, ',');
-  kinfo.lds = token;
+  kinfo.lds_per_workgroup = token;
   std::getline(tokenStream, token, ',');
-  kinfo.scratch_size = token;
+  kinfo.scratch_per_workitem = token;
   std::getline(tokenStream, token, ',');
   kinfo.arch_vgpr = token;
   std::getline(tokenStream, token, ',');
@@ -118,6 +117,8 @@ void tokenize_profiler_output(std::string line, profiler_kernel_info_t& kinfo) {
   std::getline(tokenStream, token, ',');
   kinfo.end_time = token;
   std::getline(tokenStream, token, ',');
+  kinfo.correlation_id = token;
+  std::getline(tokenStream, token, ',');
   kinfo.counter = token;
 }
 
@@ -128,11 +129,11 @@ void tokenize_tracer_output(std::string line, tracer_kernel_info_t& kinfo) {
   std::getline(tokenStream, token, ',');
   kinfo.domain = token;
   std::getline(tokenStream, token, ',');
+  int version_position = token.find('R');
+  if (version_position != std::string::npos) {
+    token = token.substr(0, version_position) + ')';
+  }
   kinfo.function = token;
-  std::getline(tokenStream, token, ',');
-  kinfo.operation = token;
-  std::getline(tokenStream, token, ',');
-  kinfo.kernel_name = token;
   std::getline(tokenStream, token, ',');
   kinfo.begin_time = token;
   std::getline(tokenStream, token, ',');
@@ -144,6 +145,19 @@ void tokenize_tracer_output(std::string line, tracer_kernel_info_t& kinfo) {
   std::getline(tokenStream, token, ',');
   kinfo.roxtx_msg = token;
 }
+
+// get numeric value of timestamp token
+uint64_t get_timestamp_value(const std::string& str) {
+  std::regex pattern("(\\d+)");
+  std::smatch match;
+
+  if (regex_search(str, match, pattern)) {
+    return stoul(match[1]);
+  } else {
+    return -1;
+  }
+}
+
 
 }  // namespace utility
 }  // namespace tests
