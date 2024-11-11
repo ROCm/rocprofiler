@@ -354,8 +354,8 @@ Example for file plugin output:
 
 - Extended lifetime for proxy queues
 - Setting the `trace-start` option for `rocprof` to `off` now disables kernel tracing
-- Load `libpciaccess-dev` functions with `dlopen`
--	Initialize `PcieAccessApi*` api and `void* libpciaccess_handle` to `nullptr`
+- `libpciaccess-dev` functions now load with `dlopen`
+-	`PcieAccessApi*` api and `void* libpciaccess_handle` are now initialized to `nullptr`
 
 ### Removed
 
@@ -369,7 +369,7 @@ Example for file plugin output:
 ### Resolved issues
 
 - Fixed bandwidth measurement in MI300
--	Fix for `s_delay_alu` followed by `s_waitcnt` on gfx11
+-	Fix implemented for `s_delay_alu` followed by `s_waitcnt` on gfx11
 -	Fixed Perfetto plugin issue of `roctx` trace not getting displayed
 -	Fixed `--help` for counter collection
 -	Fixed signal management issues in `queue.cpp`
