@@ -341,9 +341,9 @@ Example for file plugin output:
 
 - JSON output plugin for `rocprofv2`. The JSON file matches Google Trace Format making it easy to load on Perfetto, Chrome tracing, or Speedscope. For Speedscope, use `--disable-json-data-flows` option as speedscope doesn't work with data flows.
 - `--no-serialization` flag to disable kernel serialization when `rocprofv2` is in counter collection mode. This allows `rocprofv2` to avoid deadlock when profiling certain programs in counter collection mode.
--	`FP64_ACTIVE` and `ENGINE_ACTIVE`
+-	`FP64_ACTIVE` and `ENGINE_ACTIVE` metrics to AMD Instinct MI300 accelerator
 - New HIP APIs with struct defined inside union.
-- Early checks for ELF file
+- Early checks to confirm the eligibility of ELF file in ATT plugin
 - Support for kernel name filtering in `rocprofv2`
 - Barrier bit to read and stop packets
 - ROCProfiler support for gfx1150 and gfx1151
@@ -359,7 +359,7 @@ Example for file plugin output:
 
 ### Removed
 
-- Extra licenses
+- Obsolete BSD and GPL licenses
 - `libsystemd-dev` from `CMakeLists.txt`
 
 ### Optimized
