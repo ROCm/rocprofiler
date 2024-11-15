@@ -369,16 +369,15 @@ Example for file plugin output:
 ### Resolved issues
 
 - Fixed bandwidth measurement in MI300
--	Fix implemented for `s_delay_alu` followed by `s_waitcnt` on gfx11
 -	Fixed Perfetto plugin issue of `roctx` trace not getting displayed
 -	Fixed `--help` for counter collection
 -	Fixed signal management issues in `queue.cpp`
 -	Fixed Perfetto tracks for multi-GPU
--	Fixed `rocsys`
--	Fixed incorrect number of columns in the CSV file
+-	Fixed Perfetto plugin usage with `rocsys`
+-	Fixed incorrect number of columns in the output CSV files for counter collection and kernel tracing
 -	Fixed the ROCProfiler hang issue when running kernel trace, thread trace, or counter collection on Iree benchmark for AMD Instinct MI300 accelerator
 -	Fixed build errors thrown during parsing of unions
--	Fixed the system hang caused while running `--kernel-trace` with Perfetto for certain applications.
+-	Fixed the system hang caused while running `--kernel-trace` with Perfetto for certain applications
 - Fixed missing profiler records issue caused while running `--trace-period`
 -	Fixed the hang issue of `ProfilerAPITest` of `runFeatureTests` on AMD Instinct MI300 accelerator
 - Fixed segment fault on Navi32
