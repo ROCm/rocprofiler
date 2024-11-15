@@ -341,7 +341,7 @@ Example for file plugin output:
 
 - JSON output plugin for `rocprofv2`. The JSON file matches Google Trace Format making it easy to load on Perfetto, Chrome tracing, or Speedscope. For Speedscope, use `--disable-json-data-flows` option as speedscope doesn't work with data flows.
 - `--no-serialization` flag to disable kernel serialization when `rocprofv2` is in counter collection mode. This allows `rocprofv2` to avoid deadlock when profiling certain programs in counter collection mode.
--	`FP64_ACTIVE` and `ENGINE_ACTIVE` metrics to AMD Instinct MI300 accelerator
+- `FP64_ACTIVE` and `ENGINE_ACTIVE` metrics to AMD Instinct MI300 accelerator
 - New HIP APIs with struct defined inside union.
 - Early checks to confirm the eligibility of ELF file in ATT plugin
 - Support for kernel name filtering in `rocprofv2`
@@ -369,15 +369,15 @@ Example for file plugin output:
 ### Resolved issues
 
 - Fixed bandwidth measurement in MI300
--	Fixed Perfetto plugin issue of `roctx` trace not getting displayed
--	Fixed `--help` for counter collection
--	Fixed signal management issues in `queue.cpp`
--	Fixed Perfetto tracks for multi-GPU
--	Fixed Perfetto plugin usage with `rocsys`
--	Fixed incorrect number of columns in the output CSV files for counter collection and kernel tracing
--	Fixed the ROCProfiler hang issue when running kernel trace, thread trace, or counter collection on Iree benchmark for AMD Instinct MI300 accelerator
--	Fixed build errors thrown during parsing of unions
--	Fixed the system hang caused while running `--kernel-trace` with Perfetto for certain applications
+- Fixed Perfetto plugin issue of `roctx` trace not getting displayed
+- Fixed `--help` for counter collection
+- Fixed signal management issues in `queue.cpp`
+- Fixed Perfetto tracks for multi-GPU
+- Fixed Perfetto plugin usage with `rocsys`
+- Fixed incorrect number of columns in the output CSV files for counter collection and kernel tracing
+- Fixed the ROCProfiler hang issue when running kernel trace, thread trace, or counter collection on Iree benchmark for AMD Instinct MI300 accelerator
+- Fixed build errors thrown during parsing of unions
+- Fixed the system hang caused while running `--kernel-trace` with Perfetto for certain applications
 - Fixed missing profiler records issue caused while running `--trace-period`
--	Fixed the hang issue of `ProfilerAPITest` of `runFeatureTests` on AMD Instinct MI300 accelerator
+- Fixed the hang issue of `ProfilerAPITest` of `runFeatureTests` on AMD Instinct MI300 accelerator
 - Fixed segment fault on Navi32
