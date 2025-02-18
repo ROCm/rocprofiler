@@ -2,10 +2,8 @@ name: ROCm CI Caller
   
 on:  
   pull_request:  
-    branches: [amd-staging, amd-npi]  
+    branches: [release/rocm-rel-6.4]  
     types: [opened, reopened, synchronize]  
-  push:  
-    branches: [amd-staging, amd-mainline]  
   workflow_dispatch:  
   
 jobs:  
