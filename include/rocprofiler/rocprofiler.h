@@ -73,6 +73,7 @@ THE SOFTWARE.
 #endif /* !defined (ROCPROFILER_EXPORTS) */
 #endif /* !defined (ROCPROFILER) */
 
+
 #include <stddef.h>
 #include <stdint.h>
 
