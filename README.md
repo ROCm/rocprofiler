@@ -1,5 +1,8 @@
 # ROCm Profiling Tools
 
+> [!CAUTION]
+> The rocprofiler repository is retired, please use the [ROCm/rocm-systems](https://github.com/ROCm/rocm-systems) repository
+
 > [!IMPORTANT]
 We are phasing out development and support for roctracer/rocprofiler/rocprof/rocprofv2 in favor of rocprofiler-sdk/rocprofv3 in upcoming ROCm releases. Going forward, only critical defect fixes will be addressed for older versions of profiling tools and libraries. We encourage all users to upgrade to the latest version, rocprofiler-sdk library and rocprofv3 tool, to ensure continued support and access to new features.
 
